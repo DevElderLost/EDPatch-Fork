@@ -30,33 +30,33 @@ jobs:
         run: chmod +x gradlew
 
       # ================== BUILD DEBUG ==================
-      - name: Build Debug - app
-        run: ./gradlew :app:assembleDebug --stacktrace
+#      - name: Build Debug - app
+#        run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Build Debug - patchapp
-        run: ./gradlew :patchapp:assembleDebug --stacktrace
+#      - name: Build Debug - patchapp
+#        run: ./gradlew :patchapp:assembleDebug --stacktrace
 
       # ================== BUILD RELEASE ==================
       - name: Build Release - app
         run: ./gradlew :app:assembleRelease --stacktrace
 
-      - name: Build Release - patchapp
-        run: ./gradlew :patchapp:assembleRelease --stacktrace
+#      - name: Build Release - patchapp
+#        run: ./gradlew :patchapp:assembleRelease --stacktrace
 
       # ================== UPLOAD ARTIFACTS ==================
-      - name: Upload app Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-Debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+#      - name: Upload app Debug APK
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: app-Debug
+#          path: app/build/outputs/apk/debug/*.apk
+#          if-no-files-found: warn
 
-      - name: Upload patchapp Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: patchapp-Debug
-          path: patchapp/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+#      - name: Upload patchapp Debug APK
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: patchapp-Debug
+#          path: patchapp/build/outputs/apk/debug/*.apk
+#          if-no-files-found: warn
 
       - name: Upload app Release APK
         uses: actions/upload-artifact@v4
@@ -65,9 +65,9 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: warn
 
-      - name: Upload patchapp Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: patchapp-Release
-          path: patchapp/build/outputs/apk/release/*.apk
-          if-no-files-found: warn
+#      - name: Upload patchapp Release APK
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: patchapp-Release
+#          path: patchapp/build/outputs/apk/release/*.apk
+#          if-no-files-found: warn
