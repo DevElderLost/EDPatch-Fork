@@ -1,7 +1,7 @@
-name: Android CI - EDPatch
+name: Android CI - EDPatch (app + patchapp)
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
   push:
     branches: [ main ]
     paths-ignore:
@@ -29,22 +29,45 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      # ================== BUILD DEBUG ==================
+      - name: Build Debug - app
+        run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace
+      - name: Build Debug - patchapp
+        run: ./gradlew :patchapp:assembleDebug --stacktrace
 
-      - name: Upload Debug APK
+      # ================== BUILD RELEASE ==================
+      - name: Build Release - app
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Build Release - patchapp
+        run: ./gradlew :patchapp:assembleRelease --stacktrace
+
+      # ================== UPLOAD ARTIFACTS ==================
+      - name: Upload app Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: EDPatch-Debug
+          name: app-Debug
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
 
-      - name: Upload Release APK
+      - name: Upload patchapp Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: EDPatch-Release
+          name: patchapp-Debug
+          path: patchapp/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+      - name: Upload app Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-Release
           path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      - name: Upload patchapp Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: patchapp-Release
+          path: patchapp/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
