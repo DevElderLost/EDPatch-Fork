@@ -361,6 +361,16 @@ public class TestHelper {
             hsvTemp[2] += 1;
         return Color.HSVToColor(Color.alpha(mainColor), hsvTemp);
     }
+    
+    public static int darkenColorFloat(int mainColor, float darkenAmount) {
+    // darkenAmount = 0.0f → tidak berubah
+    // darkenAmount = 0.3f → seperti versi pertama Anda
+    // darkenAmount = 0.5f → lebih gelap lagi
+    
+    Color.colorToHSV(mainColor, hsvTemp);
+    hsvTemp[2] = Math.max(0.3f, hsvTemp[2] - darkenAmount);
+    return Color.HSVToColor(Color.alpha(mainColor), hsvTemp);
+}
 
     /**
      * 根据attr获取drawable

@@ -53,7 +53,7 @@ public class Const {
     /** toucharea 圆角矩形的圆角大小 */
     public static final int TOUCH_AREA_ROUND_CORNER_RADIUS = 10;
     /** touchArea 边框描边大小 */
-    public static final int TOUCH_AREA_STROKE_WIDTH = 4;
+    public static final int TOUCH_AREA_STROKE_WIDTH = 8;
     /** touchArea 绘制文字的最小大小（高度） 12sp对应的px值 */
     public static int TOUCH_AREA_MIN_TEXT_SIZE;
     /** touchArea 绘制文字的最大大小（高度） 20sp对应的px值 （32也行不过还是22吧） */
@@ -75,7 +75,7 @@ public class Const {
     public static float stickInnerMaxOffOuterRadiusRatio = 1; //摇杆内圆允许移动的距离（到内圆圆心）与外圆半径之比
     public static double stickMoveThreshold = 20; //摇杆按下并移动时，若手指距离中心小于此距离，则算作不移动
 
-    public static int defaultTouchAreaBgColor = 0xffe8f6ff;//0xffc2e2ff;
+    public static int defaultTouchAreaBgColor = 0x80ffffff;//0xffe8f6ff;//0xffc2e2ff;
     public static String profilePreferDefaultName = "default"; //设置新容器默认配置时，优先寻找叫这个名称的配置
     public static String bundledProfilesPath = "controls/profiles"; //内置配置在assets中的位置
     public static List<String> profileBundledNames = new ArrayList<>(); //放在apk/assets内的配置名（注意不是文件名）。
@@ -85,6 +85,8 @@ public class Const {
     public static boolean detailDebug = false; //用于调试的便捷开关
     /** {@link TestHelper#getWindowDisplaySize(Context)} 的值，init时赋值一次。*/
     public static Point windowDisplaySize = null;
+    public static final int NAME_DISPLAY_NORMAL = 0;
+    public static final int NAME_DISPLAY_HIDE   = 1;
 
     //TODO 如果要在没有全部完成之前发布的话，在“其他”页面添加说明这个是alpha版，不推荐使用，可能含有bug，升级到正式版时可能有冲突需要清除数据重装。
     /**
@@ -251,11 +253,13 @@ public class Const {
         int OVAL = 1;
     }
 
-    @IntDef({BtnColorStyle.STROKE, BtnColorStyle.FILL})
+    @IntDef({BtnColorStyle.STROKE, BtnColorStyle.FILL, BtnColorStyle.FILL_STROKE, BtnColorStyle.ICON_ONLY})
     @Retention(RetentionPolicy.SOURCE)
     public @interface BtnColorStyle {
         int STROKE = 0;
         int FILL = 1;
+        int FILL_STROKE= 2;
+        int ICON_ONLY= 3;
     }
 
     /**
@@ -354,7 +358,7 @@ public class Const {
         }
 
         public static boolean isProfilePerContainer(){
-            return QH.getPreference().getBoolean(PREF_KEY_ENABLE_PROFILE_PER_CONTAINER,false);
+            return QH.getPreference().getBoolean(PREF_KEY_ENABLE_PROFILE_PER_CONTAINER,true);
         }
 
         public static void setRunTaskmgrAlt(String cmd){

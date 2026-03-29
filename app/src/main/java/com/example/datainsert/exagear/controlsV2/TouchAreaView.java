@@ -35,6 +35,9 @@ import com.example.datainsert.exagear.controlsV2.edit.EditConfigWindow;
 import com.example.datainsert.exagear.controlsV2.model.ModelProvider;
 import com.example.datainsert.exagear.controlsV2.model.OneProfile;
 import com.example.datainsert.exagear.controlsV2.options.OptionsProvider;
+import com.example.datainsert.exagear.controlsV2.touchArea.TouchAreaButton;
+import com.example.datainsert.exagear.controlsV2.touchArea.TouchAreaDpad;
+import com.example.datainsert.exagear.controlsV2.touchArea.TouchAreaStick;
 import com.example.datainsert.exagear.controlsV2.widget.DrawableNumber;
 import com.example.datainsert.exagear.controlsV2.widget.TransitionHistoryView;
 
@@ -340,14 +343,44 @@ public class TouchAreaView extends FrameLayout implements View.OnKeyListener {
         return mProfile;
     }
 
-    /**
-     * 设置为当前的配置OneProfile，并同步touchArea
-     */
-    public void setProfile(OneProfile profile) {
-        boolean isEditing = mProfile != null && mProfile.isEditing();
-        mProfile = profile;
-        mProfile.syncAreaList(isEditing);
-        // ? 还应该同步profile里存储的全局属性，比如屏幕按键显隐，鼠标移动速度等
+  /** 设置为当前的配置OneProfile，并同步touchArea */
+  /**
+   * Menetapkan profile baru dan melakukan sinkronisasi touch areas. Juga memaksa reload icon pada
+   * semua komponen yang mendukung per-profile icon.
+   */
+  public void setProfile(OneProfile profile) {
+    if (profile == null) {
+        return;
     }
+
+    // Simpan status editing sebelum ganti profile
+    boolean wasEditing = mProfile != null && mProfile.isEditing();
+
+    // Update reference profile
+    mProfile = profile;
+
+    // Sinkronkan daftar touch area sesuai mode (editing atau runtime)
+    mProfile.syncAreaList(wasEditing);
+
+    // Beritahu semua touch area bahwa profile telah berubah
+    // sehingga mereka bisa reload icon dari folder controls/[nama-profile]/icon/...
+    for (TouchArea<?> area : mProfile.getTouchAreaList()) {
+        if (area instanceof TouchAreaButton) {
+            ((TouchAreaButton) area).onProfileChanged();
+        }
+        if (area instanceof TouchAreaDpad) {
+            ((TouchAreaDpad) area).onProfileChanged();
+        }
+        if (area instanceof TouchAreaStick) {
+            ((TouchAreaStick) area).onProfileChanged();
+        }
+        // Jika nanti ada komponen lain (misal TouchAreaGesture, TouchAreaTrigger, dll)
+        // tambahkan di sini juga
+    }
+
+    // Penting: paksa redraw seluruh view agar icon baru langsung terlihat
+    postInvalidate();
+    // Alternatif: invalidate();  // tapi postInvalidate lebih aman di thread UI
+   }
 }
 
