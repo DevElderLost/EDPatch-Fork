@@ -1,296 +1,400 @@
 package com.eltechs.ed.fragments;
 
-import android.annotation.SuppressLint;
-import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DividerItemDecoration;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.PopupMenu;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import com.eltechs.axs.Globals;
 import com.eltechs.axs.helpers.Assert;
 import com.eltechs.ed.R;
 import com.eltechs.ed.guestContainers.GuestContainer;
 import com.eltechs.ed.guestContainers.GuestContainersManager;
-import com.example.datainsert.exagear.FAB.dialogfragment.customcontrols.widgets.BtnColAdapter;
-import com.example.datainsert.exagear.FAB.dialogfragment.customcontrols.widgets.BtnKeyAdapter;
-import com.example.datainsert.exagear.mutiWine.MutiWine;
+import com.eltechs.ed.guestContainers.WineTheme;
+import com.example.datainsert.exagear.FAB.dialogfragment.DriveD;
+import com.example.datainsert.exagear.FAB.dialogfragment.PulseAudio;
+import com.example.datainsert.exagear.QH;
+import com.eltechs.ed.fragments.ContainerOperationProgressDialog;
 
 import java.util.List;
 
-/* loaded from: classes.dex */
 public class ManageContainersFragment extends Fragment {
-    private static final int CONT_ASYNC_ACTION_CLONE = 1;
-    private static final int CONT_ASYNC_ACTION_DELETE = 2;
-    private static final int CONT_ASYNC_ACTION_NEW = 0;
+
+    private static final int ACTION_NEW = 0;
+    private static final int ACTION_CLONE = 1;
+    private static final int ACTION_DELETE = 2;
+
     private List<GuestContainer> mContainers;
-    private TextView mEmptyTextView;
     private GuestContainersManager mGcm;
-    private boolean mIsAsyncTaskRun;
-    private OnManageContainersActionListener mListener;
-    private ProgressDialog mProgressDialog;
-    private String mProgressMessage;
+
     private RecyclerView mRecyclerView;
+    private TextView mEmptyTextView;
 
+    private ContainerOperationProgressDialog mProgressDialogFragment;
 
-    @Override // android.support.v4.app.Fragment
-    public void onAttach(Context context) {
-        super.onAttach(context);
-        try {
-            this.mListener = (OnManageContainersActionListener) context;
-        } catch (ClassCastException unused) {
-            throw new ClassCastException(context.toString() + " must implement OnManageContainersActionListener");
+    private OnManageContainersActionListener mListener;
+
+    private static final String PREFS_NAME = "com.eltechs.axs.CONFIG";
+    private static final String KEY_CURRENT_GUEST_CONT_ID = "CURRENT_GUEST_CONT_ID";
+
+    // ========================================================================
+    // AsyncTask dengan custom progress dialog
+    // ========================================================================
+    private class ContAsyncTask extends AsyncTask<GuestContainer, String, Boolean> {
+
+        private final int mAction;
+        private String mOperationName;
+
+        ContAsyncTask(int action) {
+            this.mAction = action;
+            switch (action) {
+                case ACTION_NEW:
+                    mOperationName = "Membuat container baru";
+                    break;
+                case ACTION_CLONE:
+                    mOperationName = "Mengkloning container";
+                    break;
+                case ACTION_DELETE:
+                    mOperationName = "Menghapus container";
+                    break;
+                default:
+                    mOperationName = "Operasi container";
+            }
+        }
+
+        @Override
+        protected void onPreExecute() {
+            if (getActivity() == null) return;
+
+            mProgressDialogFragment = ContainerOperationProgressDialog.newInstance(
+                    mOperationName,
+                    "Sedang mempersiapkan..."
+            );
+            mProgressDialogFragment.show(getChildFragmentManager(), "container_progress");
+        }
+
+        @Override
+        protected Boolean doInBackground(GuestContainer... params) {
+            try {
+                publishProgress("Memulai operasi...");
+
+                switch (mAction) {
+                    case ACTION_NEW:
+                        publishProgress("Membuat struktur direktori...");
+                        mGcm.createContainer();
+                        publishProgress("Container baru berhasil dibuat");
+                        break;
+
+                    case ACTION_CLONE:
+                        if (params.length == 0) return false;
+                        GuestContainer source = params[0];
+                        publishProgress("Menyalin container: " + source.mConfig.getName());
+                        mGcm.cloneContainer(source);
+                        publishProgress("Kloning selesai");
+                        break;
+
+                    case ACTION_DELETE:
+                        if (params.length == 0) return false;
+                        GuestContainer target = params[0];
+                        publishProgress("Menghapus container: " + target.mConfig.getName());
+                        mGcm.deleteContainer(target);
+                        publishProgress("Penghapusan selesai");
+                        break;
+
+                    default:
+                        return false;
+                }
+                return true;
+            } catch (Exception e) {
+                e.printStackTrace();
+                publishProgress("Terjadi kesalahan: " + e.getMessage());
+                return false;
+            }
+        }
+
+        @Override
+        protected void onProgressUpdate(String... values) {
+            if (mProgressDialogFragment != null && values.length > 0) {
+                mProgressDialogFragment.updateMessage(values[0]);
+            }
+        }
+
+    @Override
+    protected void onPostExecute(Boolean success) {
+    if (mProgressDialogFragment == null) {
+        refreshContainersList();
+        return;
+    }
+
+    final String message = success 
+        ? mOperationName + " berhasil" 
+        : mOperationName + " gagal";
+
+    final boolean isSuccess = success;
+
+    mProgressDialogFragment.finishOperation(message);
+
+    // Tunggu dialog benar-benar hilang (karena ada delay 600ms di finishOperation)
+    mProgressDialogFragment.getDialog().getWindow().getDecorView()
+        .postDelayed(() -> {
+            if (isAdded() && getContext() != null) {
+                refreshContainersList();
+//                Toast.makeText(getContext(), message, isSuccess ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG).show();
+            }
+            mProgressDialogFragment = null;
+        }, 900);   // 600ms (dari dialog) + margin kecil
+}
+    }
+
+    // ========================================================================
+    // RecyclerView Adapter
+    // ========================================================================
+    private class ContainersAdapter extends RecyclerView.Adapter<ContainersAdapter.ViewHolder> {
+
+        private final List<GuestContainer> mItems;
+
+        ContainersAdapter(List<GuestContainer> items) {
+            this.mItems = items;
+        }
+
+        class ViewHolder extends RecyclerView.ViewHolder {
+            final View root;
+            final ImageView image;
+            final TextView title;
+            final TextView subTitle;
+            final ImageButton button;         // titik tiga
+            final ImageButton selectButton;   // tombol pilih
+
+            GuestContainer item;
+
+            ViewHolder(View view) {
+                super(view);
+                root = view;
+                image = view.findViewById(2131296401);
+                title = view.findViewById(2131296508);
+                subTitle = view.findViewById(2131296504);
+                button = view.findViewById(2131296309);
+                selectButton = view.findViewById(2131300839);
+
+                title.setGravity(Gravity.CENTER_VERTICAL);
+                subTitle.setVisibility(View.GONE);
+                root.setClickable(false);
+            }
+        }
+
+        @Override
+        public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext())
+                    .inflate(2131427359, parent, false);
+            return new ViewHolder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(final ViewHolder holder, int position) {
+            holder.item = mItems.get(position);
+
+            holder.image.setImageResource(2131230876);
+            holder.title.setText(holder.item.mConfig.getName());
+
+            GuestContainer current = mGcm.getCurrentContainer();
+            boolean isCurrent = (current != null && holder.item == current);
+
+            holder.root.setBackgroundResource(isCurrent ? 2131099742 : 0);
+
+            holder.button.setOnClickListener(v -> showPopupMenu(holder, v));
+
+            holder.selectButton.setOnClickListener(v -> {
+                setCurrentGuestContainer(holder.item);
+                notifyDataSetChanged();
+            });
+        }
+
+        private void showPopupMenu(final ViewHolder holder, View anchor) {
+            final GuestContainer container = mItems.get(holder.getAdapterPosition());
+
+            PopupMenu popup = new PopupMenu(getContext(), anchor);
+            popup.inflate(2131492865);
+
+            // Force icons to show (optional)
+            try {
+                java.lang.reflect.Field fieldPopup = popup.getClass().getDeclaredField("mPopup");
+                fieldPopup.setAccessible(true);
+                Object mPopup = fieldPopup.get(popup);
+                mPopup.getClass().getDeclaredMethod("setForceShowIcon", boolean.class).invoke(mPopup, true);
+            } catch (Exception ignored) {
+            }
+
+            popup.setOnMenuItemClickListener(item -> {
+                switch (item.getItemId()) {
+                    case 2131296332: // clone
+                        new ContAsyncTask(ACTION_CLONE).execute(container);
+                        break;
+                    case 2131296333: // delete
+                        new ContAsyncTask(ACTION_DELETE).execute(container);
+                        break;
+                    case 2131296334:
+                        mListener.onManageContainersInstallPackages(container);
+                        break;
+                    case 2131296335:
+                        mListener.onManageContainerSettingsClick(container);
+                        break;
+                    case 2131296336:
+                        mListener.onManageContainersRunExplorer(container);
+                        break;
+                    case 2131300751:
+                        WineTheme.ShowTheme(getContext());
+                        break;
+                }
+                return true;
+            });
+
+            popup.setOnDismissListener(menu -> refreshContainersList());
+            popup.show();
+        }
+
+        @Override
+        public int getItemCount() {
+            return mItems.size();
         }
     }
 
-    @Override // android.support.v4.app.Fragment
-    public void onCreate(Bundle bundle) {
-        super.onCreate(bundle);
+    // ========================================================================
+    // Lifecycle & UI Setup
+    // ========================================================================
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
         setRetainInstance(true);
     }
 
-    //在这里创建右上角的菜单，需要先调用setHasOptionsMenu.才能进到这个函数里
     @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
-        // Inflate the menu; this adds items to the action bar if it is present.
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
 
-        MutiWine.setOptionMenu(menu, this);
-//        inflater.inflate(R.menu.ex_manage_containers_menu, menu);
+        mGcm = GuestContainersManager.getInstance(getContext());
+        refreshContainersList();
+
+        AppCompatActivity activity = (AppCompatActivity) getActivity();
+        if (activity != null && activity.getSupportActionBar() != null) {
+            activity.getSupportActionBar().setTitle(2131558562);
+        }
     }
 
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        View root = inflater.inflate(2131427357, container, false);
 
-    /**
-     * 准备添加到ex中的方法，用于从外部调用，执行创建容器task
-     */
-    @Deprecated
-    public void callToCreateNewContainer() {
-//        new ContAsyncTask(0).execute();
+        mRecyclerView = root.findViewById(2131296411);
+        mEmptyTextView = root.findViewById(2131296377);
+
+        mRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        mRecyclerView.addItemDecoration(new DividerItemDecoration(getContext(), DividerItemDecoration.VERTICAL));
+
+        return root;
     }
 
-//    @Override // android.support.v4.app.Fragment
-//    public boolean onOptionsItemSelected(MenuItem menuItem) {
-//        if (menuItem.getItemId() == R.id.manage_containers_new) {
-//            new ContAsyncTask(0).execute();
-//            return true;
-//        }
-//        return super.onOptionsItemSelected(menuItem);
-//    }
-
-    @Override // android.support.v4.app.Fragment
-    public View onCreateView(LayoutInflater layoutInflater, ViewGroup viewGroup, Bundle bundle) {
-        FrameLayout frameLayout = (FrameLayout) layoutInflater.inflate(R.layout.ex_basic_list, viewGroup, false);
-        this.mRecyclerView = (RecyclerView) frameLayout.findViewById(R.id.list);
-        this.mEmptyTextView = (TextView) frameLayout.findViewById(R.id.empty_text);
-        this.mRecyclerView.setLayoutManager(new LinearLayoutManager(this.mRecyclerView.getContext()));
-        this.mRecyclerView.addItemDecoration(new DividerItemDecoration(this.mRecyclerView.getContext(), 1));
-        return frameLayout;
-    }
-
-    @Override // android.support.v4.app.Fragment
+    @Override
     public void onDestroyView() {
         super.onDestroyView();
-        if (this.mProgressDialog != null) {
-            this.mProgressDialog.dismiss();
+        if (mProgressDialogFragment != null && mProgressDialogFragment.isVisible()) {
+            mProgressDialogFragment.dismissAllowingStateLoss();
+            mProgressDialogFragment = null;
         }
     }
 
-    @Override // android.support.v4.app.Fragment
-    public void onActivityCreated(Bundle bundle) {
-        super.onActivityCreated(bundle);
-        this.mGcm = GuestContainersManager.getInstance(getContext());
-        refreshContainersList();
-        ((AppCompatActivity) requireActivity()).getSupportActionBar().setTitle(R.string.wd_title_manage_containers);
-        if (this.mIsAsyncTaskRun) {
-            this.mProgressDialog = showProgressDialog(this.mProgressMessage);
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        if (context instanceof OnManageContainersActionListener) {
+            mListener = (OnManageContainersActionListener) context;
+        } else {
+            throw new ClassCastException(context + " must implement OnManageContainersActionListener");
         }
     }
 
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        inflater.inflate(2131492868, menu);
+        inflater.inflate(2131492877, menu);
+        inflater.inflate(2131492880, menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int itemId = item.getItemId();
+
+        if (itemId == 2131296417) {           // New container
+            new ContAsyncTask(ACTION_NEW).execute((GuestContainer) null);
+            return true;
+        }
+        if (itemId == 2131300755) {           // Drive D
+            showDriveDFragment();
+            return true;
+        }
+        if (itemId == 2131300758) {           // PulseAudio
+            showPulseAudio();
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    // ========================================================================
+    // Helper methods
+    // ========================================================================
     private void refreshContainersList() {
-        this.mContainers = this.mGcm.getContainersList();
-        this.mRecyclerView.setAdapter(new ContainersAdapter(this.mContainers));
-        if (this.mContainers.isEmpty()) {
-            this.mEmptyTextView.setVisibility(View.VISIBLE);
+        mContainers = mGcm.getContainersList();
+        mRecyclerView.setAdapter(new ContainersAdapter(mContainers));
+
+        if (mEmptyTextView != null) {
+            mEmptyTextView.setVisibility(mContainers.isEmpty() ? View.VISIBLE : View.GONE);
         }
     }
 
-    private ProgressDialog showProgressDialog(String str) {
-        ProgressDialog progressDialog = new ProgressDialog(getContext());
-        progressDialog.setIndeterminate(true);
-        progressDialog.setMessage(str);
-        progressDialog.setCancelable(false);
-        progressDialog.show();
-        return progressDialog;
+    private void setCurrentGuestContainer(GuestContainer container) {
+        if (container == null || getContext() == null) return;
+
+        long containerId = container.mId;
+
+        SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit()
+                .putLong(KEY_CURRENT_GUEST_CONT_ID, containerId)
+                .apply();
+
+//        Toast.makeText(getContext(), "Container aktif: " + container.mConfig.getName(), Toast.LENGTH_SHORT).show();
     }
 
-    private void closeProgressDialog(ProgressDialog progressDialog) {
-        progressDialog.dismiss();
+    private void showPulseAudio() {
+        PulseAudio pulseAudio = new PulseAudio();
+        pulseAudio.show(getChildFragmentManager(), "PulseAudio");
     }
 
-    /* loaded from: classes.dex */
+    private void showDriveDFragment() {
+        DriveD driveD = new DriveD();
+        driveD.show(getChildFragmentManager(), "DriveDDialog");
+    }
+
     public interface OnManageContainersActionListener {
-        void onManageContainerSettingsClick(GuestContainer guestContainer);
-
-        void onManageContainersInstallPackages(GuestContainer guestContainer);
-
-        void onManageContainersRunExplorer(GuestContainer guestContainer);
-    }
-
-    /* loaded from: classes.dex */
-    private class ContAsyncTask extends AsyncTask<GuestContainer, Void, Void> {
-        private int mAction;
-
-        public ContAsyncTask(int i) {
-            this.mAction = i;
-        }
-
-        @Override // android.os.AsyncTask
-        protected void onPreExecute() {
-            ManageContainersFragment.this.mIsAsyncTaskRun = true;
-            switch (this.mAction) {
-                case 0:
-                    ManageContainersFragment.this.mProgressMessage = "Creating container...";
-                    break;
-                case 1:
-                    ManageContainersFragment.this.mProgressMessage = "Cloning container...";
-                    break;
-                case 2:
-                    ManageContainersFragment.this.mProgressMessage = "Deleting container...";
-                    break;
-                default:
-                    Assert.state(false);
-                    break;
-            }
-            ManageContainersFragment.this.mProgressDialog = ManageContainersFragment.this.showProgressDialog(ManageContainersFragment.this.mProgressMessage);
-        }
-
-        @Override // android.os.AsyncTask
-        public Void doInBackground(GuestContainer... guestContainerArr) {
-            switch (this.mAction) {
-                case 0:
-                    ManageContainersFragment.this.mGcm.createContainer();
-                    return null;
-                case 1:
-                    ManageContainersFragment.this.mGcm.cloneContainer(guestContainerArr[0]);
-                    return null;
-                case 2:
-                    ManageContainersFragment.this.mGcm.deleteContainer(guestContainerArr[0]);
-                    return null;
-                default:
-                    Assert.state(false);
-                    return null;
-            }
-        }
-
-        @Override // android.os.AsyncTask
-        public void onPostExecute(Void r2) {
-            ManageContainersFragment.this.refreshContainersList();
-            if (ManageContainersFragment.this.mProgressDialog != null) {
-                ManageContainersFragment.this.closeProgressDialog(ManageContainersFragment.this.mProgressDialog);
-            }
-            ManageContainersFragment.this.mIsAsyncTaskRun = false;
-        }
-    }
-
-    /* loaded from: classes.dex */
-    private class ContainersAdapter extends RecyclerView.Adapter<ContainersAdapter.ViewHolder> {
-        private final List<GuestContainer> mItems;
-
-        public ContainersAdapter(List<GuestContainer> list) {
-            this.mItems = list;
-        }
-
-        @Override // android.support.v7.widget.RecyclerView.Adapter
-        public final ViewHolder onCreateViewHolder(ViewGroup viewGroup, int i) {
-            return new ViewHolder(LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.ex_basic_list_item_with_button, viewGroup, false));
-        }
-
-        @SuppressLint("NonConstantResourceId")
-        @Override // android.support.v7.widget.RecyclerView.Adapter
-        public void onBindViewHolder(final ViewHolder viewHolder, int i) {
-            viewHolder.mItem = this.mItems.get(i);
-            viewHolder.mImage.setImageResource(R.drawable.ic_archive_24dp);
-            viewHolder.mText.setText(viewHolder.mItem.mConfig.getName());
-            if (ManageContainersFragment.this.mGcm.getCurrentContainer() != null && viewHolder.mItem == ManageContainersFragment.this.mGcm.getCurrentContainer()) {
-                viewHolder.mView.setBackgroundResource(R.color.primary_light);
-            }
-            viewHolder.mButton.setOnClickListener(view -> {
-                final GuestContainer guestContainer = (GuestContainer) ContainersAdapter.this.mItems.get(viewHolder.getAdapterPosition());
-                PopupMenu popupMenu = new PopupMenu(ManageContainersFragment.this.getContext(), view);
-                popupMenu.inflate(R.menu.ex_container_popup_menu);
-                popupMenu.setOnMenuItemClickListener(menuItem -> {
-                    switch (menuItem.getItemId()) {
-                        case R.id.container_clone /* 2131296332 */:
-                            new ContAsyncTask(1).execute(guestContainer);
-                            break;
-                        case R.id.container_delete /* 2131296333 */:
-                            new ContAsyncTask(2).execute(guestContainer);
-                            break;
-                        case R.id.container_install_package /* 2131296334 */:
-                            mListener.onManageContainersInstallPackages(guestContainer);
-                            break;
-                        case R.id.container_properties /* 2131296335 */:
-                            mListener.onManageContainerSettingsClick(guestContainer);
-                            break;
-                        case R.id.container_run_explorer /* 2131296336 */:
-                            mListener.onManageContainersRunExplorer(guestContainer);
-                            break;
-                    }
-                    return true;
-                });
-                popupMenu.setOnDismissListener(new PopupMenu.OnDismissListener() { // from class: com.eltechs.ed.fragments.ManageContainersFragment.ContainersAdapter.1.2
-
-
-                    @Override // android.widget.PopupMenu.OnDismissListener
-                    public void onDismiss(PopupMenu popupMenu2) {
-                        ManageContainersFragment.this.refreshContainersList();
-                    }
-                });
-                popupMenu.show();
-            });
-        }
-
-        @Override // android.support.v7.widget.RecyclerView.Adapter
-        public final int getItemCount() {
-            return this.mItems.size();
-        }
-
-        /* loaded from: classes.dex */
-        private class ViewHolder extends RecyclerView.ViewHolder {
-            public final View mView;
-            public ImageButton mButton;
-            public ImageView mImage;
-            public GuestContainer mItem;
-            public TextView mSubText;
-            public TextView mText;
-
-            /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
-            public ViewHolder(View view) {
-                super(view);
-                this.mView = view;
-                this.mImage = (ImageView) view.findViewById(R.id.image);
-                this.mText = (TextView) view.findViewById(R.id.text);
-                this.mSubText = (TextView) view.findViewById(R.id.subtext);
-                this.mButton = (ImageButton) view.findViewById(R.id.button);
-                this.mText.setGravity(16);
-                this.mSubText.setVisibility(View.GONE);
-                this.mView.setClickable(false);
-            }
-        }
+        void onManageContainerSettingsClick(GuestContainer container);
+        void onManageContainersInstallPackages(GuestContainer container);
+        void onManageContainersRunExplorer(GuestContainer container);
     }
 }

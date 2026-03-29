@@ -1,5 +1,12 @@
 package com.eltechs.ed.fragments;
 
+import com.eltechs.ed.guestContainers.D3DConfig;
+import com.eltechs.ed.guestContainers.MesaConfig;
+import com.eltechs.ed.guestContainers.DsoundConfig;
+import com.eltechs.ed.guestContainers.EditControls;
+import com.eltechs.ed.guestContainers.TextureManager;
+import com.eltechs.ed.guestContainers.ShaderTest;
+import com.example.datainsert.exagear.FAB.dialogfragment.customcontrols.CustomControls;
 import static com.example.datainsert.exagear.RR.getS;
 
 import android.app.AlertDialog;
@@ -150,6 +157,16 @@ public class ContainerSettingsFragment extends PreferenceFragmentCompat implemen
 
         } else if (enable_other_arguments && preference.getKey().equals(ConSetOtherArgv.KEY_OTHER_ARGV_STUB)) {
             ConSetOtherArgv.buildDialog((EditTextPreference) preference);
+        } else if (preference.getKey().equals("D3D_VERSION")) {
+            D3DConfig.D3DVersion(getContext());
+        } else if (preference.getKey().equals("MESA_VERSION")) {
+            MesaConfig.MesaVersion(getContext());
+        } else if (preference.getKey().equals("DSOUND_VERSION")) {
+            DsoundConfig.DsoundVers(getContext());
+        } else if (preference.getKey().equals("SHADER_MODE")) {
+            ShaderTest.showDialog(getContext());
+        } else if (preference.getKey().equals("TEXTURE_MANAGER")) {
+            TextureManager.showDialog(getContext());
         } else {
             super.onDisplayPreferenceDialog(preference);
             return;

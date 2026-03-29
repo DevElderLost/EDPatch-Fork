@@ -13,103 +13,130 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
+
 import com.eltechs.ed.InstallRecipe;
-import com.eltechs.ed.R;
+import com.eltechs.ed.guestContainers.GuestContainer;
+import com.eltechs.ed.guestContainers.GuestContainersManager;
+
 import java.util.List;
 
-/* loaded from: classes.dex */
 public class ChooseRecipeFragment extends Fragment {
+
     private OnRecipeSelectedListener mListener;
     private RecyclerView mRecyclerView;
+    private GuestContainer mGuestContainer;
+    private GuestContainersManager mManager;
 
-    /* loaded from: classes.dex */
     public interface OnRecipeSelectedListener {
         void onRecipeSelected(InstallRecipe installRecipe);
     }
 
-    @Override // android.support.v4.app.Fragment
-    public void onAttach(Context context) {
-        super.onAttach(context);
-        try {
-            this.mListener = (OnRecipeSelectedListener) context;
-        } catch (ClassCastException unused) {
-            throw new ClassCastException(context.toString() + " must implement OnRecipeSelectedListener");
-        }
-    }
-
-    @Override // android.support.v4.app.Fragment
-    public void onCreate(Bundle bundle) {
-        super.onCreate(bundle);
-    }
-
-    @Override // android.support.v4.app.Fragment
-    public View onCreateView(LayoutInflater layoutInflater, ViewGroup viewGroup, Bundle bundle) {
-        FrameLayout frameLayout = (FrameLayout) layoutInflater.inflate(R.layout.ex_basic_list, viewGroup, false);
-        this.mRecyclerView = (RecyclerView) frameLayout.findViewById(R.id.list);
-        this.mRecyclerView.setLayoutManager(new LinearLayoutManager(this.mRecyclerView.getContext()));
-        this.mRecyclerView.addItemDecoration(new DividerItemDecoration(this.mRecyclerView.getContext(), 1));
-        return frameLayout;
-    }
-
-    @Override // android.support.v4.app.Fragment
-    public void onActivityCreated(Bundle bundle) {
-        super.onActivityCreated(bundle);
-        this.mRecyclerView.setAdapter(new RecipeAdapter(InstallRecipe.LIST));
-        ((AppCompatActivity) getActivity()).getSupportActionBar().setTitle(R.string.wd_title_select_install_recipe);
-    }
-
-    /* JADX INFO: Access modifiers changed from: private */
-    /* loaded from: classes.dex */
     private class RecipeAdapter extends RecyclerView.Adapter<RecipeAdapter.ViewHolder> {
+
         private final List<InstallRecipe> mItems;
 
-        public RecipeAdapter(List<InstallRecipe> list) {
-            this.mItems = list;
-        }
+        public class ViewHolder extends RecyclerView.ViewHolder {
+            public final View mView;
+            public ImageView mImage;
+            public TextView mText;
+            public InstallRecipe mItem;
 
-        @Override // android.support.v7.widget.RecyclerView.Adapter
-        public final ViewHolder onCreateViewHolder(ViewGroup viewGroup, int i) {
-            return new ViewHolder(LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.ex_basic_list_item, viewGroup, false));
-        }
-
-        @Override // android.support.v7.widget.RecyclerView.Adapter
-        public void onBindViewHolder(final ViewHolder viewHolder, int i) {
-            viewHolder.mItem = this.mItems.get(i);
-            if (i == getItemCount() - 1) {
-                viewHolder.mImage.setImageResource(R.drawable.ic_help_24dp);
-            } else {
-                viewHolder.mImage.setImageResource(R.drawable.ic_description_24dp);
+            public ViewHolder(View view) {
+                super(view);
+                mView = view;
+                mImage = (ImageView) view.findViewById(2131296401);
+                mText = (TextView) view.findViewById(2131296508);
             }
-            viewHolder.mText.setText(viewHolder.mItem.toString());
-            viewHolder.mView.setOnClickListener(new View.OnClickListener() { // from class: com.eltechs.ed.fragments.ChooseRecipeFragment.RecipeAdapter.1
+        }
 
+        public RecipeAdapter(List<InstallRecipe> items) {
+            this.mItems = items;
+        }
 
-                @Override // android.view.View.OnClickListener
-                public void onClick(View view) {
-                    ChooseRecipeFragment.this.mListener.onRecipeSelected((InstallRecipe) RecipeAdapter.this.mItems.get(viewHolder.getAdapterPosition()));
+        @Override
+        public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext())
+                    .inflate(2131427358, parent, false);
+            return new ViewHolder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(final ViewHolder holder, int position) {
+            holder.mItem = mItems.get(position);
+
+            if (position == getItemCount() - 1) {
+                holder.mImage.setImageResource(2131230882);
+            } else {
+                holder.mImage.setImageResource(2131230879);
+            }
+
+            holder.mText.setText(holder.mItem.toString());
+
+            holder.mView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (mListener != null) {
+                        mListener.onRecipeSelected(holder.mItem);
+                    }
                 }
             });
         }
 
-        @Override // android.support.v7.widget.RecyclerView.Adapter
-        public final int getItemCount() {
-            return this.mItems.size();
+        @Override
+        public int getItemCount() {
+            return mItems.size();
+        }
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        FrameLayout root = (FrameLayout) inflater.inflate(2131427357, container, false);
+        mRecyclerView = (RecyclerView) root.findViewById(2131296411);
+        mRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        mRecyclerView.addItemDecoration(new DividerItemDecoration(getContext(), DividerItemDecoration.VERTICAL));
+        return root;
+    }
+
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+
+        if (getArguments() != null) {
+            mGuestContainer = (GuestContainer) getArguments().getSerializable("guest_container");
+            mManager = (GuestContainersManager) getArguments().getSerializable("guest_manager");
         }
 
-        /* loaded from: classes.dex */
-        private class ViewHolder extends RecyclerView.ViewHolder {
-            public ImageView mImage;
-            public InstallRecipe mItem;
-            public TextView mText;
-            public final View mView;
-
-            /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
-            public ViewHolder(View view) {
-                super(view);
-                this.mView = view;
-                this.mImage = (ImageView) view.findViewById(R.id.image);
-                this.mText = (TextView) view.findViewById(R.id.text);
-            }
+        if (mGuestContainer == null || mManager == null) {
+            // Fallback atau tampilkan pesan error
+            return;
         }
+
+        List<InstallRecipe> recipes = InstallRecipe.getAllRecipes(
+                getContext(),
+                mGuestContainer,
+                mManager
+        );
+
+        mRecyclerView.setAdapter(new RecipeAdapter(recipes));
+
+        AppCompatActivity activity = (AppCompatActivity) getActivity();
+        if (activity != null && activity.getSupportActionBar() != null) {
+            activity.getSupportActionBar().setTitle(2131558563);
+        }
+    }
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        if (context instanceof OnRecipeSelectedListener) {
+            mListener = (OnRecipeSelectedListener) context;
+        } else {
+            throw new ClassCastException(context.toString() + " must implement OnRecipeSelectedListener");
+        }
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
     }
 }
