@@ -111,9 +111,9 @@ public class Edit2GestureView extends LinearLayout implements EditConfigWindow.O
         });
 
         Button btnNewLayoutTest = new Button(c);
-        btnNewLayoutTest.setText("新UI测试");
+        btnNewLayoutTest.setText("Gesture Editing Test");
         btnNewLayoutTest.setOnClickListener(v -> {
-            Const.getEditWindow().toNextView(new EditGestureRootView(v.getContext(), getGestureAreaModel()), "手势编辑");
+            Const.getEditWindow().toNextView(new EditGestureRootView(v.getContext(), getGestureAreaModel()), "Gesture Editing");
         });
 
         //放入tabPager
@@ -136,8 +136,8 @@ public class Edit2GestureView extends LinearLayout implements EditConfigWindow.O
         String[] tabTitles = RR.getSArr(RR.ctr2_ges_subTitles);
         TabPagerLayout tabPagerLayout = new TabPagerLayout(c)
                 .addTabAndPage(tabTitles[0], linearState)//状态
-                .addTabAndPage(tabTitles[1], linearAction)//附加操作
-                .addTabAndPage(tabTitles[2], linearDebug);//调试
+                .addTabAndPage(tabTitles[1], linearAction);//附加操作
+//                .addTabAndPage(tabTitles[2], linearDebug);//调试
 
         addView(tabPagerLayout);
     }
