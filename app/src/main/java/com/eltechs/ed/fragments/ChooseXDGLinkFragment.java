@@ -7,7 +7,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Bitmap;
 import android.text.TextUtils;
 import com.eltechs.axs.Globals;
-import com.eltechs.ed.MSLink;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import android.content.Context;
@@ -252,10 +251,7 @@ public class ChooseXDGLinkFragment extends Fragment {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-            } else if (file.getName().toLowerCase().endsWith(".lnk")) {
-                MSLink.createDesktopEntry(file, getContext());
-                refresh();
-            }
+
         }
         return items;
   }
