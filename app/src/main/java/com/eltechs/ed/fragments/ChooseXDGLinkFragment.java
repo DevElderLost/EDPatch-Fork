@@ -251,7 +251,7 @@ public class ChooseXDGLinkFragment extends Fragment {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-
+            }
         }
         return items;
   }
