@@ -39,7 +39,13 @@ jobs:
 #      - name: Copy app Debug APK as patcher.apk (into patchapp debug assets)
 #        run: |
 #          mkdir -p patchapp/assets/patcher/debug
-#          cp app/build/outputs/apk/debug/app-debug.apk patchapp/assets/patcher/debug/patcher.apk
+#          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+#          if [ -z "$APK_PATH" ]; then
+#            echo "Error: tidak ada file .apk ditemukan di app/build/outputs/apk/debug"
+#            exit 1
+#          fi
+#          echo "Menggunakan APK: $APK_PATH"
+#          cp "$APK_PATH" patchapp/assets/patcher/debug/patcher.apk
 
 #      - name: Build Debug - patchapp
 #        run: ./gradlew :patchapp:assembleDebug --stacktrace
@@ -54,7 +60,13 @@ jobs:
       - name: Copy app Release APK as patcher.apk (into patchapp release assets)
         run: |
           mkdir -p patchapp/assets/patcher/release
-          cp app/build/outputs/apk/release/app-release.apk patchapp/assets/patcher/release/patcher.apk
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: tidak ada file .apk ditemukan di app/build/outputs/apk/release"
+            exit 1
+          fi
+          echo "Menggunakan APK: $APK_PATH"
+          cp "$APK_PATH" patchapp/assets/patcher/release/patcher.apk
 
       - name: Build Release - patchapp
         run: ./gradlew :patchapp:assembleRelease --stacktrace
