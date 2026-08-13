@@ -40,8 +40,8 @@ jobs:
       - name: Build Release - app
         run: ./gradlew :app:assembleRelease --stacktrace
 
-#      - name: Build Release - patchapp
-#        run: ./gradlew :patchapp:assembleRelease --stacktrace
+      - name: Build Release - patchapp
+        run: ./gradlew :patchapp:assembleRelease --stacktrace
 
       # ================== UPLOAD ARTIFACTS ==================
 #      - name: Upload app Debug APK
@@ -65,9 +65,9 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: warn
 
-#      - name: Upload patchapp Release APK
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: patchapp-Release
-#          path: patchapp/build/outputs/apk/release/*.apk
-#          if-no-files-found: warn
+      - name: Upload patchapp Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: patchapp-Release
+          path: patchapp/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
