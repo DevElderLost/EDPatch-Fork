@@ -144,8 +144,11 @@ public class SubView3Style extends LinearLayout {
         LinearLayout linearCAContent = new LinearLayout(c);
         linearCAContent.addView(editInColor, generateLayoutParams(eqWidthParams));
         linearCAContent.addView(seekAlpha, generateLayoutParams(eqWidthParams));
-        LinearLayout linearCAOuter = QH.getOneLineWithTitle(c, getS(RR.cmCtrl_s3_btnColor), linearCAContent, true);
-        setDialogTooltip(linearCAOuter.getChildAt(0), getS(RR.cmCtrl_s3_btnColorTip));
+        String title = "Color & Alpha settings";
+        String tooltip = "Color is a RGB hex value, e.g. 2121FA. \nAlpha varies from 0 to 255. If alpha is 0, button\'s background is transparent, button\'s text keeps 1/3 of the visibility.";
+
+        LinearLayout linearCAOuter = QH.getOneLineWithTitle(c, title, linearCAContent, true);
+        setDialogTooltip(linearCAOuter.getChildAt(0), tooltip);
         addView(linearCAOuter, QH.LPLinear.one().top().to());
 
         //侧栏背景颜色

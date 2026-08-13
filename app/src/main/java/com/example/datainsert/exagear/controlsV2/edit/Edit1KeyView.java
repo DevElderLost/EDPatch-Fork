@@ -24,7 +24,11 @@ import com.example.datainsert.exagear.controlsV2.TouchAreaModel;
 import com.example.datainsert.exagear.controlsV2.TouchAreaView;
 import com.example.datainsert.exagear.controlsV2.edit.props.Prop;
 import com.example.datainsert.exagear.controlsV2.edit.props.Prop0MainColor;
+import com.example.datainsert.exagear.controlsV2.edit.props.Prop1Icon;
+import com.example.datainsert.exagear.controlsV2.edit.props.Prop1IconDpad;
+import com.example.datainsert.exagear.controlsV2.edit.props.Prop1IconJoystick;
 import com.example.datainsert.exagear.controlsV2.edit.props.Prop1Name;
+import com.example.datainsert.exagear.controlsV2.edit.props.Prop1ShowName;
 import com.example.datainsert.exagear.controlsV2.edit.props.Prop0Size;
 import com.example.datainsert.exagear.controlsV2.edit.props.Prop0Type;
 import com.example.datainsert.exagear.controlsV2.edit.props.Prop1Key;
@@ -99,13 +103,13 @@ public class Edit1KeyView extends LinearLayout implements Prop.Host<TouchAreaMod
         });
 
         Button btnTest = new Button(c);
-        btnTest.setText("测试宽高");
+        btnTest.setText("Test Width and High");
         btnTest.setOnClickListener(v -> {
             TestHelper.getSystemDisplaySize(v.getContext());
         });
 
         Button btnTestRead = new Button(c);
-        btnTestRead.setText("测试读取state");
+        btnTestRead.setText("Test Read State");
         btnTestRead.setOnClickListener(v -> {
             String json = "{\"modelList\":[{\"allStateList\":[{\"id\":1,\"stateType\":2},{\"id\":2,\"stateType\":3},{\"countDownMs\":250,\"fastMoveThreshold\":36.0,\"fingerIndex\":0,\"noMoveThreshold\":12.0,\"id\":3,\"niceName\":\"\",\"stateType\":1}],\"tranActionsList\":[[]],\"tranEventList\":[1],\"tranPostStateList\":[1],\"tranPreStateList\":[2],\"colorStyle\":0,\"height\":1600,\"keycodes\":[0],\"left\":0,\"mMinAreaSize\":80,\"mainColor\":-1286,\"modelType\":3,\"name\":\"None\",\"top\":0,\"width\":2560}],\"name\":\"1\",\"version\":0}\n";
             Gson gson = new GsonBuilder()
@@ -157,9 +161,9 @@ public class Edit1KeyView extends LinearLayout implements Prop.Host<TouchAreaMod
         mPanelsNew.setLayoutTransition(new LayoutTransition());
 
         mProps.put(PROP_KEY_UNIVERSAL, new Prop[]{new Prop0Type(this, c, typeChangeListener), new Prop0MainColor(this, c), new Prop0Size(this, c)});
-        mProps.put(TouchAreaModel.TYPE_BUTTON, new Prop[]{new Prop1Name(this, c), new Prop1Key(this, c), new Prop1Shape(this, c), new Prop1Trigger(this, c)});
-        mProps.put(TouchAreaModel.TYPE_STICK, new Prop[]{new Prop2Key(this, c), new Prop2Direction(this, c)});
-        mProps.put(TouchAreaModel.TYPE_DPAD, new Prop[]{new Prop3Key(this, c)});
+        mProps.put(TouchAreaModel.TYPE_BUTTON, new Prop[]{new Prop1Icon (this, c), new Prop1ShowName(this, c), new Prop1Name(this, c), new Prop1Key(this, c), new Prop1Shape(this, c), new Prop1Trigger(this, c)});
+        mProps.put(TouchAreaModel.TYPE_STICK, new Prop[]{new Prop1IconJoystick (this, c), new Prop2Key(this, c), new Prop2Direction(this, c)});
+        mProps.put(TouchAreaModel.TYPE_DPAD, new Prop[]{new Prop1IconDpad (this, c), new Prop3Key(this, c)});
         mProps.put(TouchAreaModel.TYPE_COLUMN, new Prop[]{new Prop5LenLimit(this, c), new Prop5Vertical(this, c), new Prop5Keys(this, c), });
 
         for(Integer typeInt : mProps.keySet()) {

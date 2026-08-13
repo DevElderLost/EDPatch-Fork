@@ -11,6 +11,8 @@ public class OneButton extends TouchAreaModel {
     private int shape = Const.BtnShape.RECT;
     private boolean isTrigger = false;
     private String name = null; //还是允许为null吧
+    // Di dalam class OneButton
+    private int nameDisplayMode = Const.NAME_DISPLAY_NORMAL;  // default: tampilkan nama
 
     transient private int triggerFlag=0;
 
@@ -50,6 +52,14 @@ public class OneButton extends TouchAreaModel {
 
     public void setShape(@Const.BtnShape int shape) {
         this.shape = shape;
+    }
+    
+    public int getNameDisplayMode() {
+    return nameDisplayMode;
+    }
+
+    public void setNameDisplayMode(int mode) {
+    this.nameDisplayMode = mode;
     }
 
     /**

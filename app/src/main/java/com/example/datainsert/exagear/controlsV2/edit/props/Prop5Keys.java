@@ -34,7 +34,7 @@ public class Prop5Keys extends Prop<TouchAreaModel> {
         LinearLayout linearRoot = new LinearLayout(c);
         linearRoot.setOrientation(LinearLayout.VERTICAL);
 
-        TextView btnSelect = QH.TV.one(c).button().text("重新选择按键").text16Sp().textGravity(Gravity.START).to();
+        TextView btnSelect = QH.TV.one(c).button().text("Reselect").text16Sp().textGravity(Gravity.START).to();
         btnSelect.setOnClickListener(v -> {
             TouchAreaModel model = mHost.getModel();
             KeyOnBoardView keyOnBoardView = new KeyOnBoardView(v.getContext());

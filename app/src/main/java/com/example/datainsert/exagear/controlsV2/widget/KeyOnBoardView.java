@@ -39,54 +39,148 @@ public class KeyOnBoardView extends NestedScrollView implements CompoundButton.O
 
     private boolean mIsMaxOne = false;
 
-    public KeyOnBoardView(@NonNull Context c) {
-        super(c);
-        setBackgroundColor(0xff5C5F63);
+public KeyOnBoardView(@NonNull Context c) {
+    super(c);
+    setBackgroundColor(0xff5C5F63);
 
-        HorizontalScrollView horizontalScrollView = new HorizontalScrollView(c);
-        addView(horizontalScrollView, new NestedScrollView.LayoutParams(-2, -2));
+    HorizontalScrollView horizontalScrollView = new HorizontalScrollView(c);
+    addView(horizontalScrollView, new NestedScrollView.LayoutParams(-2, -2));
 
-        final int w = dp8*6;
-        LinearLayout linearKeyboardRoot = new LinearLayout(c);
-        linearKeyboardRoot.setOrientation(LinearLayout.VERTICAL);
-        linearKeyboardRoot.setClipChildren(false);
-        linearKeyboardRoot.addView(getKeyButtonsOneLine(
-                new XKeyButton.Info[]{key_esc,key_f1,key_f2,key_f3,key_f4,key_f5,key_f6,key_f7,key_f8,key_f9,key_f10,key_f11,key_f12,key_print_screen,key_scroll_lock,key_pause},
-                new int[]{w,w,w,w,w,w,w,w,w,w,w,w,w,w,w,w},
-                new int[]{0,dp8*6,0,0,0,px(28),0,0,0,px(28),0,0,0,dp8,0,0}
-        ),QH.LPLinear.one(-2,-2).to());
-        linearKeyboardRoot.addView(getKeyButtonsOneLine(
-                new XKeyButton.Info[]{key_grave,key_1,key_2,key_3,key_4,key_5,key_6,key_7,key_8,key_9,key_0,key_minus,key_equal,key_backspace,key_insert,key_home,key_page_up,key_number_lock,key_keypad_slash,key_keypad_asterisk,key_keypad_minus,pointer_left,pointer_scroll_up,pointer_right},
-                new int[]{w,w,w,w,w,w,w,w,w,w,w,w,w,px(104),w,w,w,w,w,w,w,w,w,w},
-                new int[]{0,0,0,0,0,0,0,0,0,0,0,0,0,0,dp8,0,0,dp8,0,0,0,px(56),0,0}
-        ),QH.LPLinear.one(-2,-2).top(dp8*3).to());
-        linearKeyboardRoot.addView(getKeyButtonsOneLine(
-                new XKeyButton.Info[]{key_tab,key_q,key_w,key_e,key_r,key_t,key_y,key_u,key_i,key_o,key_p,key_open_bracket,key_close_bracket,key_backslash,key_delete,key_end,key_page_down,key_keypad_7,key_keypad_8,key_keypad_9,key_keypad_plus,pointer_scroll_down},
-                new int[]{px(76),w,w,w,w,w,w,w,w,w,w,w,w,px(76),w,w,w,w,w,w,w,w},
-                new int[]{0,0,0,0,0,0,0,0,0,0,0,0,0,0,dp8,0,0,dp8,0,0,0,px(112)}
-        ),QH.LPLinear.one(-2,-2).top(-dp8*6).to());
-        linearKeyboardRoot.addView(getKeyButtonsOneLine(
-                new XKeyButton.Info[]{key_caps_lock,key_a,key_s,key_d,key_f,key_g,key_h,key_j,key_k,key_l,key_semicolon,key_apostrophe,key_enter,key_keypad_4,key_keypad_5,key_keypad_6,pointer_body_stub},
-                new int[]{px(92),w,w,w,w,w,w,w,w,w,w,w,px(116),w,w,w,px(160)},
-                new int[]{0,0,0,0,0,0,0,0,0,0,0,0,0,px(184),0,0,px(112)}
-        ),QH.LPLinear.one(-2,-2).top(-dp8*6).to());
-        linearKeyboardRoot.addView(getKeyButtonsOneLine(
-               new XKeyButton.Info[]{key_left_shift,key_z,key_x,key_c,key_v,key_b,key_n,key_m,key_comma,key_dot,key_slash,key_right_shift,key_up,key_keypad_1,key_keypad_2,key_keypad_3,key_keypad_enter},
-               new int[]{px(120),w,w,w,w,w,w,w,w,w,w,px(144),w,w,w,w,w},
-               new int[]{0,0,0,0,0,0,0,0,0,0,0,0,dp8*8,dp8*8,0,0,0}
-        ),QH.LPLinear.one(-2,-2).top(-dp8*13).to());
-        linearKeyboardRoot.addView(getKeyButtonsOneLine(
-              new XKeyButton.Info[]{key_left_ctrl,key_left_win,key_left_alt,key_spacebar,key_right_alt,key_right_win,key_menu,key_right_ctrl,key_left,key_down,key_right,key_keypad_0,key_keypad_dot},
-              new int[]{px(64),px(64),px(64),px(340),px(60),px(64),px(60),px(60),w,w,w,px(104),w},
-              new int[]{0,0,0,0,0,0,0,0,dp8,0,0,dp8,0}
-        ),QH.LPLinear.one(-2,-2).top(-dp8*6).to());
+    final int w = dp8 * 6;
 
-        LinearLayout linearMouseRoot = new LinearLayout(c);
-        linearMouseRoot.setOrientation(LinearLayout.VERTICAL);
-        linearMouseRoot.setClipChildren(false);
+    LinearLayout linearKeyboardRoot = new LinearLayout(c);
+    linearKeyboardRoot.setOrientation(LinearLayout.VERTICAL);
+    linearKeyboardRoot.setClipChildren(false);
 
-        horizontalScrollView.addView(linearKeyboardRoot,QH.LPLinear.one(-2,-2).top().bottom().to());
-    }
+    // ================= BARIS 1 =================
+    linearKeyboardRoot.addView(getKeyButtonsOneLine(
+            new XKeyButton.Info[]{
+                    key_esc,key_f1,key_f2,key_f3,key_f4,key_f5,key_f6,
+                    key_f7,key_f8,key_f9,key_f10,key_f11,key_f12,
+                    key_print_screen,key_scroll_lock,key_pause
+            },
+            new int[]{w,w,w,w,w,w,w,w,w,w,w,w,w,w,w,w},
+            new int[]{0,dp8*6,0,0,0,px(28),0,0,0,px(28),0,0,0,dp8,0,0}
+    ),QH.LPLinear.one(-2,-2).to());
+
+    // ================= BARIS 2 (POINTER DIUBAH) =================
+    linearKeyboardRoot.addView(getKeyButtonsOneLine(
+            new XKeyButton.Info[]{
+                    key_grave,key_1,key_2,key_3,key_4,key_5,key_6,key_7,key_8,key_9,key_0,
+                    key_minus,key_equal,key_backspace,
+                    key_insert,key_home,key_page_up,
+                    key_number_lock,key_keypad_slash,key_keypad_asterisk,key_keypad_minus,
+                    pointer_left,pointer_center,pointer_right,pointer_scroll_up
+            },
+            new int[]{
+                    w,w,w,w,w,w,w,w,w,w,w,
+                    w,w,px(104),
+                    w,w,w,
+                    w,w,w,w,
+                    w,w,w,w
+            },
+            new int[]{
+                    0,0,0,0,0,0,0,0,0,0,0,
+                    0,0,0,
+                    dp8,0,0,
+                    dp8,0,0,0,
+                    px(56),0,0,0
+            }
+    ),QH.LPLinear.one(-2,-2).top(dp8*3).to());
+
+    // ================= BARIS 3 =================
+    linearKeyboardRoot.addView(getKeyButtonsOneLine(
+            new XKeyButton.Info[]{
+                    key_tab,key_q,key_w,key_e,key_r,key_t,key_y,key_u,key_i,key_o,key_p,
+                    key_open_bracket,key_close_bracket,key_backslash,
+                    key_delete,key_end,key_page_down,
+                    key_keypad_7,key_keypad_8,key_keypad_9,key_keypad_plus,
+                    pointer_scroll_down
+            },
+            new int[]{
+                    px(76),w,w,w,w,w,w,w,w,w,w,
+                    w,w,px(76),
+                    w,w,w,
+                    w,w,w,w,
+                    w
+            },
+            new int[]{
+                    0,0,0,0,0,0,0,0,0,0,0,
+                    0,0,0,
+                    dp8,0,0,
+                    dp8,0,0,0,
+                    px(112)
+            }
+    ),QH.LPLinear.one(-2,-2).top(-dp8*6).to());
+
+    // ================= BARIS 4 =================
+    linearKeyboardRoot.addView(getKeyButtonsOneLine(
+            new XKeyButton.Info[]{
+                    key_caps_lock,key_a,key_s,key_d,key_f,key_g,key_h,key_j,key_k,key_l,
+                    key_semicolon,key_apostrophe,key_enter,
+                    key_keypad_4,key_keypad_5,key_keypad_6,pointer_body_stub
+            },
+            new int[]{
+                    px(92),w,w,w,w,w,w,w,w,w,
+                    w,w,px(116),
+                    w,w,w,px(160)
+            },
+            new int[]{
+                    0,0,0,0,0,0,0,0,0,0,
+                    0,0,0,
+                    px(184),0,0,px(112)
+            }
+    ),QH.LPLinear.one(-2,-2).top(-dp8*6).to());
+
+    // ================= BARIS 5 =================
+    linearKeyboardRoot.addView(getKeyButtonsOneLine(
+            new XKeyButton.Info[]{
+                    key_left_shift,key_z,key_x,key_c,key_v,key_b,key_n,key_m,
+                    key_comma,key_dot,key_slash,key_right_shift,
+                    key_up,
+                    key_keypad_1,key_keypad_2,key_keypad_3,key_keypad_enter
+            },
+            new int[]{
+                    px(120),w,w,w,w,w,w,w,
+                    w,w,w,px(144),
+                    w,
+                    w,w,w,w
+            },
+            new int[]{
+                    0,0,0,0,0,0,0,0,
+                    0,0,0,0,
+                    dp8*8,
+                    dp8*8,0,0,0
+            }
+    ),QH.LPLinear.one(-2,-2).top(-dp8*13).to());
+
+    // ================= BARIS 6 =================
+    linearKeyboardRoot.addView(getKeyButtonsOneLine(
+            new XKeyButton.Info[]{
+                    key_left_ctrl,key_left_win,key_left_alt,key_spacebar,
+                    key_right_alt,key_right_win,key_menu,key_right_ctrl,
+                    key_left,key_down,key_right,
+                    key_keypad_0,key_keypad_dot
+            },
+            new int[]{
+                    px(64),px(64),px(64),px(340),
+                    px(60),px(64),px(60),px(60),
+                    w,w,w,
+                    px(104),w
+            },
+            new int[]{
+                    0,0,0,0,
+                    0,0,0,0,
+                    dp8,0,0,
+                    dp8,0
+            }
+    ),QH.LPLinear.one(-2,-2).top(-dp8*6).to());
+
+    horizontalScrollView.addView(
+            linearKeyboardRoot,
+            QH.LPLinear.one(-2,-2).top().bottom().to()
+    );
+}
     private int px(int dp){
         return QH.px(getContext(),dp);
     }

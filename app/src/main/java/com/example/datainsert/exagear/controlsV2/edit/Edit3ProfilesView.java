@@ -93,6 +93,14 @@ public class Edit3ProfilesView extends LinearLayout {
             Const.getControlFragment().requestImportProfile(importCallback);
             return true;
         });
+        popupMenuAdd.getMenu().add(/*Import Custom Icon*/addTitles[3]).setOnMenuItemClickListener(item->{
+            Const.getControlFragment().requestImportIcon(importCallback);
+            return true;
+        });
+        popupMenuAdd.getMenu().add(/*Import Custom Icon and Profiles*/addTitles[4]).setOnMenuItemClickListener(item->{
+            Const.getControlFragment().requestImportPack(importCallback);
+            return true;
+        });
         btnAdd.setOnClickListener(v -> popupMenuAdd.show());
 
         RecyclerView recyclerView = new RecyclerView(c);

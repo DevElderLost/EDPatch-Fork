@@ -43,3 +43,5 @@ app/src/main/cpp/libadrenotools/
 /patchapp/release/
 app/src/main/java/com/eltechs/axs/configuration/startup/actions/CheckLicense.java
 /app/src/main/java/com/eltechs/axs/helpers/licensing
+EDPatch.tar.xz
+.androidide/

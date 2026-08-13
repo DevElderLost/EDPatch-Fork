@@ -285,6 +285,10 @@ public class RR {
     public static int ctr2_prop_lengthLimit = 275;
     public static int ctr2_prop_vertical = 276;
     public static int ctr2_prop_vertical_names = 279;
+    public static int xegw_displayCursor_tip = 280;
+    public static int xegw_forceBGRA_tip = 281;
+    public static int xegw_indirectGLX_tip = 282;
+
 
 
 
@@ -807,9 +811,9 @@ public class RR {
         enArray.put(global_keycode,"Keycodes");
         enArray.put(global_shape,"Shape");
         enArray.put(ctr2_prop_direction_title,"Direction");
-        enArray.put(ctr2_prop_colorStyle_names,"stroke$fill");
+        enArray.put(ctr2_prop_colorStyle_names,"stroke$fill$Both$disable");
         enArray.put(ctr2_prop_type_names,"Button$Stick$D-pad$Btn Group");
-        enArray.put(ctr2_prop_shape_names,"Rectangle$Circle");
+        enArray.put(ctr2_prop_shape_names,"Square$Circle");
         enArray.put(ctr2_prop_direction_names,"4 directions$8 directions$mouse move");
         enArray.put(ctr2_ges_state,"State");
         enArray.put(ctr2_ges_action,"Action");
@@ -850,13 +854,13 @@ public class RR {
         enArray.put(ctr2_FSMR_value_fingerIndex,"All fingers$1$2$3$4$5$6$7$8$9$10");
         enArray.put(ctr2_FSMR_value_pointerMoveType,"Normal$Game camera moving");
         enArray.put(ctr2_customControls2,"Custom Controls 2");
-        enArray.put(ctr2_option_showHideTouchArea,"Show/Hide buttons");
+        enArray.put(ctr2_option_showHideTouchArea,"Show/Hide Virtual Control");
         enArray.put(global_quit,"Quit");
         enArray.put(ctr2_option_showAll,"Show all options");
-        enArray.put(ctr2_option_softInput,"Show/Hide Android input method");
+        enArray.put(ctr2_option_softInput,"KeyBoard");
         enArray.put(ctr2_profile_importMsgs,"Import succeeded: $Import failed: ");
         enArray.put(ctr2_profile_exportMsgs,"Export succeeded: $Export failed: ");
-        enArray.put(ctr2_profile_addOptions,"Empty profile$Copy existing profile$Import from local file");
+        enArray.put(ctr2_profile_addOptions,"Empty profile$Copy existing profile$Import Profile$Import Custom Icon$Import Profile Pack");
         enArray.put(ctr2_profile_oneOptions,"Set to default for new container$Export as file$Duplicate$Rename$Delete");
         enArray.put(ctr2_profile_editName,"Profile name");
         enArray.put(ctr2_profile_delConfirm,"Delete this profile?");
@@ -886,6 +890,9 @@ public class RR {
         enArray.put(ctr2_prop_lengthLimit, "Length limit");
         enArray.put(ctr2_prop_vertical, "Orientation");
         enArray.put(ctr2_prop_vertical_names, "horizontal$vertical");
+        enArray.put(xegw_indirectGLX_tip, "Indirect GLX");
+        enArray.put(xegw_forceBGRA_tip, "Force BGRA");
+        enArray.put(xegw_displayCursor_tip, "Display Cursor");
 
 
 

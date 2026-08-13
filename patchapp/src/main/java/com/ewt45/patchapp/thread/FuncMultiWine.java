@@ -38,29 +38,33 @@ public class FuncMultiWine implements Func{
     public Integer call() throws Exception {
         Log.d(TAG, "call: 开始添加多wine共存功能");
         //首次安装
-        if(getInstalledVersion()==INVALID_VERSION){
+//        if(getInstalledVersion()==INVALID_VERSION){
             //ManageContainerFragment
-            new SmaliFile()
-                    .findSmali("com.eltechs.ed.fragments.ManageContainersFragment")
+//            new SmaliFile()
+//                    .findSmali("com.eltechs.ed.fragments.ManageContainersFragment")
                     //删除onOptionsItemSelected方法
-                    .deleteMethod(".method public onOptionsItemSelected")
+//                    .deleteMethod(".method public onOptionsItemSelected")
                     //修改onCreateOptionsMenu内容
-                    .deleteMethod(".method public onCreateOptionsMenu")
-                    .addMethod(PatcherFile.getSmaliMethod("com/eltechs/ed/fragments/ManageContainersFragment.smali",".method public onCreateOptionsMenu"))
-                    .close();
-        }
+//                    .deleteMethod(".method public onCreateOptionsMenu")
+//                    .addMethod(PatcherFile.getSmaliMethod("com/eltechs/ed/fragments/ManageContainersFragment.smali",".method public onCreateOptionsMenu"))
+//                    .close();
+//        }
 
         //StartGuest 添加环境变量
         new FuncAddEnvs().call();
+        
+        PatcherFile.copy(PatcherFile.TYPE_SMALI, new String[]{
+           "/com/eltechs/ed/fragment/ManageContainersFragment" 
+        });
 
         //复制文件夹
-        PatcherFile.copy(PatcherFile.TYPE_SMALI, new String[]{
-                "/com/google/gson", //json依赖
-                "/org/tukaani/xz", //xz解压依赖
-                "/com/example/datainsert/exagear/mutiWine",
-                "/com/example/datainsert/exagear/RR.smali",
-                "/com/example/datainsert/exagear/QH.smali",
-        });
+//        PatcherFile.copy(PatcherFile.TYPE_SMALI, new String[]{
+//                "/com/google/gson", //json依赖
+//                "/org/tukaani/xz", //xz解压依赖
+//                "/com/example/datainsert/exagear/mutiWine",
+//                "/com/example/datainsert/exagear/RR.smali",
+//                "/com/example/datainsert/exagear/QH.smali",
+//        });
 
         return R.string.funcname_mw;
     }

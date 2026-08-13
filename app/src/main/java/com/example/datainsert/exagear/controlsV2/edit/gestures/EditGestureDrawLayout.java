@@ -55,6 +55,11 @@ public class EditGestureDrawLayout extends FrameLayout implements View.OnTouchLi
     private Path mActionPath = new Path();
     private Path mTranPath = new Path();
     private DynamicLayout mTextLayout;
+    private static final String TAG = "EditGestureDraw";
+
+    private float downX, downY;           // touch down position (raw)
+    private int initialLeft, initialTop;  // initial layout margins when touch began
+    private boolean noClickWhenFinish = false;
 
     public EditGestureDrawLayout(Context c, OneGestureArea model) {
         super(c);
@@ -63,7 +68,7 @@ public class EditGestureDrawLayout extends FrameLayout implements View.OnTouchLi
         setFocusable(true);
         setFocusableInTouchMode(true);
         setClickable(true);
-//        setOnTouchListener(this);
+        setOnTouchListener(this);
 
         List<LState> currCol;
         List<Adjustable> adjustableList = new ArrayList<>();
@@ -247,113 +252,142 @@ public class EditGestureDrawLayout extends FrameLayout implements View.OnTouchLi
 
     @Override
     protected void onDraw(Canvas canvas) {
-//        canvas.drawPath(mStatePath, mStateBgPaint);
+        canvas.drawPath(mStatePath, mStateBgPaint);
 
         canvas.save();
         canvas.translate(offXY.x, offXY.y);
 
-//        for(int colIdx=0; colIdx<linkedStates.size(); colIdx++) {
-//            List<LState> col = linkedStates.get(colIdx);
-//            float frameTop = 0;
-//            float frameLeft = colIdx * (widthState + marginStateRightToActionLeft + widthAction + marginActionRightToNextStateLeft);
-//            for(int rowIdx=0; rowIdx<col.size(); rowIdx++) {
-//                LState lstate = col.get(rowIdx);
-//                lstate.colIdx = colIdx;
-//                lstate.pos.top = frameTop;
-//                lstate.pos.left = frameLeft;
-//                lstate.pos.right = frameLeft + widthState;
-//                lstate.pos.bottom = frameTop + heightStateTitle + marginEventTopToTitleBottom + (heightEventText + marginEventVertical) * lstate.postMap.keySet().size();
-//
-//                //先确定state框的位置。下一遍循环再确定连线的位置
-//                canvas.drawRoundRect(lstate.pos, radiusRoundRect, radiusRoundRect, mStateBgPaint);
-//
-//                float actionLeft = lstate.pos.right + marginStateRightToActionLeft;
-//                float actionRight = actionLeft + widthAction;
-//                float eventTop = lstate.pos.top + heightStateTitle + marginEventTopToTitleBottom;
-//                for(int idx=0; idx<lstate.events.length; idx++) {
-//                    int eventCode = lstate.events[idx];
-//                    List<Integer> actions = lstate.actionsMap.get(eventCode);
-//                    if(actions == null || actions.isEmpty())
-//                        continue;
-//                    float actionTop = eventTop + (heightEventText * marginEventVertical) * idx;
-//                    canvas.drawRoundRect(actionLeft, actionTop, actionRight, actionTop+heightEventText,
-//                            radiusRoundRect, radiusRoundRect, mActionBgPaint);
-//                }
-//
-//                frameTop = frameTop + lstate.pos.height()+ marginStateVertical;
-//            }
-//        }
+        for(int colIdx=0; colIdx<linkedStates.size(); colIdx++) {
+            List<LState> col = linkedStates.get(colIdx);
+            float frameTop = 0;
+            float frameLeft = colIdx * (widthState + marginStateRightToActionLeft + widthAction + marginActionRightToNextStateLeft);
+            for(int rowIdx=0; rowIdx<col.size(); rowIdx++) {
+                LState lstate = col.get(rowIdx);
+                lstate.colIdx = colIdx;
+                lstate.pos.top = frameTop;
+                lstate.pos.left = frameLeft;
+                lstate.pos.right = frameLeft + widthState;
+                lstate.pos.bottom = frameTop + heightStateTitle + marginEventTopToTitleBottom + (heightEventText + marginEventVertical) * lstate.postMap.keySet().size();
+
+                //先确定state框的位置。下一遍循环再确定连线的位置
+                canvas.drawRoundRect(lstate.pos, radiusRoundRect, radiusRoundRect, mStateBgPaint);
+
+                float actionLeft = lstate.pos.right + marginStateRightToActionLeft;
+                float actionRight = actionLeft + widthAction;
+                float eventTop = lstate.pos.top + heightStateTitle + marginEventTopToTitleBottom;
+                for(int idx=0; idx<lstate.events.length; idx++) {
+                    int eventCode = lstate.events[idx];
+                    List<Integer> actions = lstate.actionsMap.get(eventCode);
+                    if(actions == null || actions.isEmpty())
+                        continue;
+                    float actionTop = eventTop + (heightEventText * marginEventVertical) * idx;
+                    canvas.drawRoundRect(actionLeft, actionTop, actionRight, actionTop+heightEventText,
+                            radiusRoundRect, radiusRoundRect, mActionBgPaint);
+                }
+
+                frameTop = frameTop + lstate.pos.height()+ marginStateVertical;
+            }
+        }
 
         canvas.restore();
     }
 
-//    @Override
-//    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-//        int finalWidthSpec = makeMeasureSpec(maxWidth,MeasureSpec.EXACTLY);
-//        int finalHeightSpec = makeMeasureSpec(maxHeight, MeasureSpec.EXACTLY);
-//
-//        super.onMeasure(finalWidthSpec, finalHeightSpec);
-//    }
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int finalWidthSpec = makeMeasureSpec(maxWidth,MeasureSpec.EXACTLY);
+        int finalHeightSpec = makeMeasureSpec(maxHeight, MeasureSpec.EXACTLY);
+
+        super.onMeasure(finalWidthSpec, finalHeightSpec);
+    }
 
     PointF lastPos = new PointF();
     PointF offXY = new PointF(); //绘制时应该偏移的大小
 
-//    @Override
-//    public boolean onTouchEvent(MotionEvent event) {
-//        PointF latestPos = new PointF(event.getRawX(), event.getRawY());
-//        Log.d("TAG", "onTouch: "+latestPos);
-//        if(event.getAction() != MotionEvent.ACTION_DOWN) {
-//            offXY.set(latestPos.x-lastPos.x + offXY.x, latestPos.y-lastPos.y + offXY.y);
-//        }
-//        lastPos = latestPos;
-//        invalidate();
-//        return true;
-////        return super.onTouchEvent(event);
-//    }
+  @Override
+  public boolean onTouchEvent(MotionEvent event) {
+    float x = event.getRawX();
+    float y = event.getRawY();
 
-    @Override
-    public boolean onTouch(View touchedV, MotionEvent event) {
-        PointF latestPos = new PointF(event.getRawX(), event.getRawY());
-        Log.d("TAG", "onTouch: "+latestPos);
-//        if (!(getParent() instanceof FrameLayout && getLayoutParams() instanceof FrameLayout.LayoutParams))
-//            return false;
+    switch (event.getAction()) {
+        case MotionEvent.ACTION_DOWN:
+            lastPos.set(x, y);
+            return true;
 
-        FrameLayout.LayoutParams paramsUpd = (FrameLayout.LayoutParams) getLayoutParams();
-        switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN: {
-                lastPos = latestPos;
-                return true;
-            }
-            default:
-                offXY.set(latestPos.x-lastPos.x + offXY.x, latestPos.y-lastPos.y + offXY.y);
-                lastPos = latestPos;
-                invalidate();
-                return true;
-//            case MotionEvent.ACTION_MOVE: {
-//                paramsUpd.leftMargin = downXY[0] + latestPos[0] - downPos[0];
-//                paramsUpd.topMargin = downXY[1] + latestPos[1] - downPos[1];
-//                setLayoutParams(paramsUpd);
-//
-//                int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
-//                if (Math.abs(latestPos[0] - downPos[0]) > slop || Math.abs(latestPos[1] - downPos[1]) > slop)
-//                    noClickWhenFinish = true;
-////                        Log.d(TAG, "onTouch: " + String.format("%d, %d, %d, %d, %s, %s", v.getLeft(), v.getTop(), v.getRight(), v.getBottom(), v.getWidth() == v.getRight() - v.getLeft(), v.getHeight() == v.getBottom() - v.getTop()));
-////                        Log.d(TAG, "onTouch: " + String.format("%d, %d, %d, %d, %s, %s", v.getBottom(), ((FrameLayout) v.getParent()).getHeight(), v.getRight(), v.getBottom(), v.getWidth() == v.getRight() - v.getLeft(), v.getHeight() == v.getBottom() - v.getTop()));
-//                return true;
-//            }
-//            //其实这里应该也应该同ACTION_MOVE更新坐标
-//            case MotionEvent.ACTION_UP:
-//            case MotionEvent.ACTION_CANCEL: {
-//                setPressed(false);
-//
-//                if (!noClickWhenFinish)
-//                    performClick();
-//                noClickWhenFinish=false;
-//                return true;
-//            }
-        }
-//        return false;
+        case MotionEvent.ACTION_MOVE:
+            float dx = x - lastPos.x;
+            float dy = y - lastPos.y;
+
+            offXY.x += dx;
+            offXY.y += dy;
+
+            lastPos.set(x, y);
+            invalidate();
+            return true;
+
+        case MotionEvent.ACTION_UP:
+        case MotionEvent.ACTION_CANCEL:
+            return true;
     }
+
+    return super.onTouchEvent(event);
+  }
+  @Override
+  public boolean onTouch(View touchedV, MotionEvent event) {
+    if (!(getParent() instanceof FrameLayout)) {
+        return false;
+    }
+
+    FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) getLayoutParams();
+
+    float rawX = event.getRawX();
+    float rawY = event.getRawY();
+
+    switch (event.getAction()) {
+        case MotionEvent.ACTION_DOWN:
+            downX = rawX;
+            downY = rawY;
+            initialLeft = params.leftMargin;
+            initialTop  = params.topMargin;
+            noClickWhenFinish = false;
+            setPressed(true);
+            return true;
+
+        case MotionEvent.ACTION_MOVE:
+            int deltaX = (int) (rawX - downX);
+            int deltaY = (int) (rawY - downY);
+
+            params.leftMargin = initialLeft + deltaX;
+            params.topMargin  = initialTop  + deltaY;
+
+            // optional: prevent going outside parent
+            // params.leftMargin = Math.max(0, Math.min(params.leftMargin, parentWidth - getWidth()));
+            // params.topMargin  = Math.max(0, Math.min(params.topMargin, parentHeight - getHeight()));
+
+            setLayoutParams(params);
+
+            // detect movement for click suppression
+            int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+            if (Math.abs(deltaX) > slop || Math.abs(deltaY) > slop) {
+                noClickWhenFinish = true;
+            }
+
+            // optional debug
+            // Log.d(TAG, "moved → left=" + params.leftMargin + ", top=" + params.topMargin);
+            return true;
+
+        case MotionEvent.ACTION_UP:
+        case MotionEvent.ACTION_CANCEL:
+            setPressed(false);
+
+            if (!noClickWhenFinish) {
+                performClick();
+            }
+            noClickWhenFinish = false;
+            return true;
+    }
+
+    return false;
+  }
 
     private static class LState {
         //不准了。

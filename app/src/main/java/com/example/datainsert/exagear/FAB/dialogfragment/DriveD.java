@@ -208,7 +208,7 @@ public class DriveD extends BaseFragment {
 
         //文件夹父目录
         MyTextInputEditText tvInputParDir = new MyTextInputEditText(requireContext(), null, null, getS(RR.DriveD_EditParTitle));
-        tvInputParDir.setInputType(InputType.TYPE_NULL);
+        tvInputParDir.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         String[] deviceType = getSArr(RR.DriveD2_devType);
         String[] parType = getSArr(RR.DriveD2_parType);
         tvInputParDir.setPopupMenuCallback(v -> {

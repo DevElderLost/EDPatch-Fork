@@ -129,12 +129,12 @@ public class XKeyButton {
      * <br/> 由于需要借助key_max，所以必须声明到它下面
      */
     public static final int POINTER_MASK = key_max.xKeyCode+1; //0x300
-    final public static Info pointer_left = new Info(POINTER_MASK|POINTER_LEFT,0,KeyEvent.KEYCODE_UNKNOWN,"🖱️\nLeft");
-    final public static Info pointer_right = new Info(POINTER_MASK|POINTER_RIGHT,0,KeyEvent.KEYCODE_UNKNOWN,"🖱️\nRight");
-    final public static Info pointer_center = new Info(POINTER_MASK|POINTER_CENTER,0,KeyEvent.KEYCODE_UNKNOWN,"️🖱️\nCenter");
+    final public static Info pointer_left = new Info(POINTER_MASK|POINTER_LEFT,0,KeyEvent.KEYCODE_UNKNOWN,"MBL");
+    final public static Info pointer_right = new Info(POINTER_MASK|POINTER_RIGHT,0,KeyEvent.KEYCODE_UNKNOWN,"MBR");
+    final public static Info pointer_center = new Info(POINTER_MASK|POINTER_CENTER,0,KeyEvent.KEYCODE_UNKNOWN,"️MBC");
     final public static Info pointer_scroll_up = new Info(POINTER_MASK|POINTER_SCROLL_UP,0,KeyEvent.KEYCODE_UNKNOWN,"Scroll\nUp");
     final public static Info pointer_scroll_down = new Info(POINTER_MASK|POINTER_SCROLL_DOWN,0,KeyEvent.KEYCODE_UNKNOWN,"Scroll\nDown");
-    final public static Info pointer_body_stub = new Info(0,0,KeyEvent.KEYCODE_UNKNOWN,"🖱️");
+    final public static Info pointer_body_stub = new Info(0,0,KeyEvent.KEYCODE_UNKNOWN,"MB");
 
 
     //static块必须在这些变量之后声明，否则反射获取到的都是null
