@@ -9,6 +9,7 @@ import com.eltechs.axs.configuration.UBTLaunchConfiguration;
 import com.eltechs.axs.configuration.startup.actions.AbstractStartupAction;
 import com.eltechs.axs.helpers.SafeFileHelpers;
 import com.example.datainsert.exagear.QH;
+import com.example.datainsert.exagear.action.RefactorSizeHelper;
 import com.example.datainsert.exagear.containerSettings.ConSetOtherArgv;
 import com.example.datainsert.exagear.containerSettings.otherargv.Arguments;
 
@@ -63,6 +64,16 @@ public class AddEnvironmentVariables<StateClass extends UBTLaunchConfigurationAw
                 }
 
                 // ────────────────────────────────────────────────
+                // 1b. Refactor Size - sisipkan daemon refactorsize.exe
+                //     ke command wine yang sama (background, & di akhir),
+                //     supaya jalan di UBT/desktop yang sama dengan game,
+                //     bukan proses UBT terpisah seperti taskmgr.
+                // ────────────────────────────────────────────────
+                if (QH.classExist("com.example.datainsert.exagear.action.RefactorSizeHelper")) {
+                    injectRefactorSizeDaemon(ubtConfig);
+                }
+
+                // ────────────────────────────────────────────────
                 // 2. Gabungkan LD_LIBRARY_PATH (extra di depan)
                 // ────────────────────────────────────────────────
                 mergeExtraLdLibraryPath(ubtConfig);
@@ -104,6 +115,46 @@ public class AddEnvironmentVariables<StateClass extends UBTLaunchConfigurationAw
         ubtConfig.setGuestArguments(newArgv.toArray(new String[0]));
 
         Log.d(TAG, "Wine command setelah otherArgv:\n  " + modifiedCmd);
+    }
+
+    /**
+     * Sisipkan "wine explorer /desktop=shell '&lt;refactorsize.exe&gt;' &amp; "
+     * tepat sebelum command "wine " utama di command yang sama, supaya
+     * daemon refactorsize.exe jalan sebagai background job di dalam
+     * proses UBT/shell yang sama dengan game (desktop Wine "shell" yang
+     * sama - lihat StartGuest.getWineOptions()), bukan proses UBT
+     * terpisah lewat GuestApplicationsTrackerComponent (itu gagal karena
+     * mendarat di desktop Wine yang berbeda, GetForegroundWindow() tidak
+     * pernah melihat window game).
+     *
+     * Daemon-nya sendiri idle, cuma poll flag file - baru benar-benar
+     * mengubah window kalau di-toggle dari menu options (RefactorSizeHelper.toggle()).
+     */
+    private void injectRefactorSizeDaemon(UBTLaunchConfiguration ubtConfig) {
+        try {
+            RefactorSizeHelper.stageHelperExe();
+
+            List<String> argvList = ubtConfig.getGuestArguments();
+            if (argvList == null || argvList.isEmpty()) return;
+
+            String lastArg = argvList.get(argvList.size() - 1);
+            if (lastArg == null || lastArg.isEmpty()) return;
+
+            int wineIdx = lastArg.indexOf("wine ");
+            if (wineIdx < 0) return; // launch ini tidak lewat wine (mis. install script) - skip
+
+            String daemonLaunch = "wine explorer /desktop=shell 'Z:\\opt\\edpatch\\"
+                    + RefactorSizeHelper.EXE_NAME + "' & ";
+            String modified = lastArg.substring(0, wineIdx) + daemonLaunch + lastArg.substring(wineIdx);
+
+            List<String> newArgv = new ArrayList<>(argvList);
+            newArgv.set(newArgv.size() - 1, modified);
+            ubtConfig.setGuestArguments(newArgv.toArray(new String[0]));
+
+            Log.d(TAG, "Refactor Size daemon disisipkan:\n  " + modified);
+        } catch (Exception e) {
+            Log.w(TAG, "Gagal menyisipkan Refactor Size daemon", e);
+        }
     }
 
     private void mergeExtraLdLibraryPath(UBTLaunchConfiguration ubtConfig) {
