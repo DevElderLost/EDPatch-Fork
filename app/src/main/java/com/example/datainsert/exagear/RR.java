@@ -261,6 +261,7 @@ public class RR {
     public static int ctr2_option_showAll = 250;
     public static int ctr2_option_softInput = 251;
     public static int ctr2_option_fullscreen = 252;
+    public static int ctr2_option_refactorsize = 283;
     public static int ctr2_profile_importMsgs=253;
     public static int ctr2_profile_exportMsgs=254;
     public static int ctr2_profile_addOptions=255;
@@ -563,6 +564,7 @@ public class RR {
         zhArray.put(ctr2_other_showTouchArea,"显示屏幕按键 (退出编辑时生效)");
         zhArray.put(ctr2_editExitConfirm,"保存并退出编辑模式？");
         zhArray.put(ctr2_option_fullscreen,"切换拉伸全屏");
+        zhArray.put(ctr2_option_refactorsize,"重构大小(无边框全屏)");
         zhArray.put(ctr2_other_reExtract,"还原内置配置" +
                 "$内置配置为apk安装后自带的配置。若您修改了这些配置，此操作会导致修改全部丢失！确定要继续吗？");
         zhArray.put(ctr2_other_syncFallout,"修复鼠标位置与光标偏移");
@@ -870,6 +872,7 @@ public class RR {
         enArray.put(ctr2_other_showTouchArea,"Show buttons on screen \n(take effect after exit edit mode)");
         enArray.put(ctr2_editExitConfirm,"Save and exit Edit Mode?");
         enArray.put(ctr2_option_fullscreen,"Toggle stretched fullscreen");
+        enArray.put(ctr2_option_refactorsize,"Refactor Size (Borderless Fullscreen)");
         enArray.put(ctr2_other_reExtract,"Reset bundled profiles" +
                 "$Bundled profiles are those that appear at the first app launch. All modification to these profiles will be lost! Sure to continue?");
         enArray.put(ctr2_other_syncFallout,"Sync pointer and cursor drawable position\n");

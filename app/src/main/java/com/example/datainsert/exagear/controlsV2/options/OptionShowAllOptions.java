@@ -43,6 +43,7 @@ public class OptionShowAllOptions extends AbstractOption {
                 new OptionTouchAreaDisplay(),
                 new OptionToggleSoftInput(),
                 new OptionToggleFullScreen(),
+                new OptionRefactorSize(),
                 new OptionCmdTool(),
                 new OptionTaskMgr(),
                 new OptionShowLogTracer(),   // <-- opsi baru ditambahkan di sini

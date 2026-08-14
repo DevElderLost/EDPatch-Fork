@@ -253,8 +253,27 @@ public class ChooseXDGLinkFragment extends Fragment {
                     e.printStackTrace();
                 }
             } else if (file.getName().toLowerCase().endsWith(".lnk")) {
-                MSLink.createDesktopEntry(file, getContext());
-                refresh();
+                // [patch:lnk-freeze-fix]
+                String baseName = file.getName().substring(0, file.getName().lastIndexOf('.'));
+                File desktopFile = new File(file.getParentFile(), baseName + ".desktop");
+
+                if (desktopFile.exists()) {
+                    // .desktop dengan nama sama sudah ada, tidak perlu dibuat ulang.
+                    try {
+                        items.add(new XDGNode(parentNode.mCont, desktopFile, new XDGLink(parentNode.mCont, desktopFile)));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    MSLink.createDesktopEntry(file, getContext());
+                    if (desktopFile.exists()) {
+                        try {
+                            items.add(new XDGNode(parentNode.mCont, desktopFile, new XDGLink(parentNode.mCont, desktopFile)));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
             }
         }
         return items;
