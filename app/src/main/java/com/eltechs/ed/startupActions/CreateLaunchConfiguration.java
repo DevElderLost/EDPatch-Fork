@@ -173,6 +173,8 @@ public class CreateLaunchConfiguration<StateClass extends EDApplicationState>
                 new File(imagePath, winePrefix + "/dosdevices/c:").getAbsolutePath()
         );
 
+        SafeFileHelpers.symlink("../drive_x", new File(imagePath, winePrefix + "/dosdevices/x:").getAbsolutePath());
+
         File driveD = new File(imagePath, winePrefix + "/dosdevices/d:");
         driveD.delete();
 
