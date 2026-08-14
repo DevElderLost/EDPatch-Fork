@@ -57,6 +57,7 @@ public class CreateTypicalWineLaunchConfiguration<StateClass extends Environment
                 ExagearImageConfigurationHelpers helper = new ExagearImageConfigurationHelpers(getApplicationState().getExagearImage());
                 String winePrefix = this.homeDir + ".wine/";
                 linkedHashMap.put(winePrefix + "dosdevices/c_", winePrefix + "drive_c");
+                linkedHashMap.put(winePrefix + "dosdevices/x_", winePrefix + "drive_x");
                 linkedHashMap.put(winePrefix + "dosdevices/d_", exagearRootFromPath);
                 helper.createFakeSymlink(winePrefix + "dosdevices", "d_", exagearRootFromPath);
                 if (this.putAdditionalDisks) {

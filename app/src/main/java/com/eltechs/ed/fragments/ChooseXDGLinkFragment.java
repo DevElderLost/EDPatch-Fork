@@ -253,17 +253,16 @@ public class ChooseXDGLinkFragment extends Fragment {
                     e.printStackTrace();
                 }
             } else if (file.getName().toLowerCase().endsWith(".lnk")) {
-                // [patch:lnk-freeze-fix]
+                // [patch:lnk-freeze-fix-v2]
                 String baseName = file.getName().substring(0, file.getName().lastIndexOf('.'));
                 File desktopFile = new File(file.getParentFile(), baseName + ".desktop");
 
                 if (desktopFile.exists()) {
-                    // .desktop dengan nama sama sudah ada, tidak perlu dibuat ulang.
-                    try {
-                        items.add(new XDGNode(parentNode.mCont, desktopFile, new XDGLink(parentNode.mCont, desktopFile)));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    // .desktop dengan nama sama sudah ada (baik sudah diproses
+                    // pada iterasi ini maupun sudah ada sebelumnya di disk).
+                    // Lewati -- jangan ditambahkan lagi ke items agar tidak
+                    // duplikat dengan entry .desktop yang sudah/akan diproses
+                    // oleh cabang endsWith(".desktop") di atas.
                 } else {
                     MSLink.createDesktopEntry(file, getContext());
                     if (desktopFile.exists()) {
