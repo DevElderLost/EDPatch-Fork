@@ -56,8 +56,32 @@ public class CreateTypicalWineLaunchConfiguration<StateClass extends Environment
             try {
                 ExagearImageConfigurationHelpers helper = new ExagearImageConfigurationHelpers(getApplicationState().getExagearImage());
                 String winePrefix = this.homeDir + ".wine/";
+
+                // BARU: buat folder drive_x + file penanda .windows-serial SEBELUM dipakai
+                // di fileNameReplacements. Tanpa file ini, Wine (GetLogicalDriveStrings)
+                // tidak menganggap X: sebagai drive valid meskipun foldernya sudah ada.
+                // Meniru fix resmi di Winlator: WineUtils.createDosdevicesSymlinks()
+                File fsRoot = getApplicationState().getExagearImage().getPath();
+                File driveXDir = new File(fsRoot, winePrefix + "drive_x");
+                if (!driveXDir.isDirectory()) {
+                    driveXDir.mkdirs();
+                    driveXDir.setReadable(true, false);
+                    driveXDir.setWritable(true, false);
+                    driveXDir.setExecutable(true, false);
+                }
+                File driveXSerial = new File(driveXDir, ".windows-serial");
+                if (!driveXSerial.exists()) {
+                    try (java.io.FileWriter fw = new java.io.FileWriter(driveXSerial)) {
+                        String serial = String.format(java.util.Locale.ENGLISH, "%-8x", (int) 'X').replace(' ', '0');
+                        fw.write(serial + "\n");
+                    } catch (IOException e) {
+                        android.util.Log.w("CreateTypicalWineLaunch", "Gagal menulis .windows-serial untuk drive_x", e);
+                    }
+                }
+
                 linkedHashMap.put(winePrefix + "dosdevices/c_", winePrefix + "drive_c");
                 linkedHashMap.put(winePrefix + "dosdevices/x_", winePrefix + "drive_x");
+                helper.createFakeSymlink(winePrefix + "dosdevices", "x_", winePrefix + "drive_x");
                 linkedHashMap.put(winePrefix + "dosdevices/d_", exagearRootFromPath);
                 helper.createFakeSymlink(winePrefix + "dosdevices", "d_", exagearRootFromPath);
                 if (this.putAdditionalDisks) {

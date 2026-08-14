@@ -173,6 +173,27 @@ public class CreateLaunchConfiguration<StateClass extends EDApplicationState>
                 new File(imagePath, winePrefix + "/dosdevices/c:").getAbsolutePath()
         );
 
+        // BARU: buat folder drive_x + file penanda .windows-serial SEBELUM symlink dibuat.
+        // Tanpa file ini, Wine (GetLogicalDriveStrings) tidak menganggap X: sebagai drive
+        // yang valid meskipun foldernya sudah ada, sehingga wfm tidak bisa membacanya.
+        // Meniru fix resmi di Winlator: WineUtils.createDosdevicesSymlinks()
+        File driveXDir = new File(imagePath, winePrefix + "/drive_x");
+        if (!driveXDir.isDirectory()) {
+            driveXDir.mkdirs();
+            driveXDir.setReadable(true, false);
+            driveXDir.setWritable(true, false);
+            driveXDir.setExecutable(true, false);
+        }
+        File driveXSerial = new File(driveXDir, ".windows-serial");
+        if (!driveXSerial.exists()) {
+            try (java.io.FileWriter fw = new java.io.FileWriter(driveXSerial)) {
+                String serial = String.format(java.util.Locale.ENGLISH, "%-8x", (int) 'X').replace(' ', '0');
+                fw.write(serial + "\n");
+            } catch (java.io.IOException e) {
+                Log.w(TAG, "Gagal menulis .windows-serial untuk drive_x", e);
+            }
+        }
+
         SafeFileHelpers.symlink("../drive_x", new File(imagePath, winePrefix + "/dosdevices/x:").getAbsolutePath());
 
         File driveD = new File(imagePath, winePrefix + "/dosdevices/d:");
