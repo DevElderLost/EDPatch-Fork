@@ -1,127 +1,87 @@
 package com.example.datainsert.exagear.action;
 
-import android.content.SharedPreferences;
 import android.util.Log;
 
 import com.eltechs.axs.Globals;
-import com.eltechs.axs.applicationState.ExagearImageAware;
-import com.eltechs.axs.configuration.UBTLaunchConfiguration;
-import com.eltechs.ed.EDApplicationState;
 import com.example.datainsert.exagear.QH;
 
-import org.apache.commons.io.FileUtils;
-
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Objects;
 
 /**
  * "Refactor Size" - toggles borderless-fullscreen for the foreground guest
  * window, using the same SetWindowLong/SetWindowPos technique as
  * Winlator-Ludashi-test's wn-refactor-size helper.
  *
- * IMPORTANT (fixed after real-device testing, see x86-stderr.txt):
- * libubt/lkv_LoadApp execve()s guestExecutable *directly* - it does NOT
- * know how to run a Windows PE on its own. Pointing guestExecutable
- * straight at refactorsize.exe fails immediately with ENOEXEC:
- *   "lkv_LoadApp: execve() is guaranteed to fail with -8 (ENOEXEC ...)"
- * Every real launch path in this codebase (CreateLaunchConfiguration,
- * OptionTaskMgr) instead execve()s a real ELF/script (bash, or a tiny
- * shell wrapper with a #!/bin/bash shebang - scripts are exec()-able via
- * the kernel's binfmt_script, a PE is not) which then runs `wine ...`
- * *inside* the guest. This class now follows OptionTaskMgr's proven
- * pattern exactly: reuse the wrapper script + eval trick (OptionTaskMgr's
- * own comments note that pointing guestExecutable straight at "/bin/bash"
- * without going through the wrapper script did not work either - "找不到
- * eval ..." / "couldn't find eval ...").
+ * v4 (this revision): fixes a second cross-session state leak, found via
+ * x86-stderr(-first).txt after v3 shipped. v3's fix ("use a plain static
+ * field instead of SharedPreferences, it'll reset itself every session")
+ * assumed the Android process gets recreated every time the container is
+ * re-entered - true for Winlator's Activity-scoped equivalent field, but
+ * NOT true here: EDPatch-Fork's process stays alive across "exit
+ * container, re-enter container" (confirmed from the logs -
+ * winhandler_mini.exe launches identically both times, so the guest side
+ * was always fine - the bug was purely static Java state on the Android
+ * side never getting reset). A static field with no explicit reset is
+ * exactly as broken as the original SharedPreferences bug, just moved
+ * from disk to RAM - same symptom: works once on a fresh container, does
+ * nothing after re-entering.
  *
- * Also critical: a fresh UBTLaunchConfiguration does NOT attach to the
- * already-running wineserver/X session - it must clone fsRoot,
- * guestExecutablePath, guestEnvironmentVariables, vfsHacks and
- * socketPathSuffix from the *currently running* config
- * (EDApplicationState.getUBTLaunchConfiguration()), exactly like
- * OptionTaskMgr does, otherwise this either fails to find the guest
- * environment or spins up a disconnected session that can't see/resize
- * the actual foreground window.
+ * Fix: `enabled` and refactorsize.dat cleanup are now reset EXPLICITLY via
+ * resetForNewSession(), called from WinHandlerMini.prepareForLaunch() -
+ * which itself is called once per container launch from
+ * StartGuest.execute() (see the smali patch). That's a reliable "a new
+ * session is starting" signal regardless of whether the process is fresh
+ * or reused, unlike relying on static field initialization.
  */
 public class RefactorSizeHelper {
     private static final String TAG = "RefactorSizeHelper";
-    private static final String PREF_KEY = "refactor_size_enabled";
-    private static final long HELPER_EXE_BYTES = 16384L;
-    private static final String WRAPPER_SCRIPT_NAME = "run-refactorsize.sh";
     private static final String EXE_GUEST_PATH = "Z:\\opt\\edpatch\\refactorsize.exe";
+    private static final long HELPER_EXE_BYTES = 16384L;
+
+    /** Deliberately NOT persisted - but unlike v3, do NOT rely on this
+     * merely being a static field to reset itself. It's reset explicitly
+     * by resetForNewSession() every container launch. */
+    private static volatile boolean enabled = false;
 
     public static boolean isEnabled() {
-        return QH.getPreference().getBoolean(PREF_KEY, false);
+        return enabled;
     }
 
     /** Called from the options grid item. Flips state and runs the helper. */
     public static void toggle() {
-        boolean newState = !isEnabled();
-        apply(newState);
-        SharedPreferences.Editor editor = QH.getPreference().edit();
-        editor.putBoolean(PREF_KEY, newState);
-        editor.apply();
-    }
+        // Normally a no-op: StartGuest.execute() already launched
+        // winhandler_mini.exe eagerly (see WinHandlerMini.prepareForLaunch()/
+        // injectIntoCommand()). Only actually spawns anything if that eager
+        // path was somehow skipped for this launch.
+        WinHandlerMini.get().ensureStartedFallback();
 
-    private static void apply(boolean enabled) {
-        try {
-            stageHelperExe();
-            String shPath = stageWrapperScript();
-
-            EDApplicationState appState = (EDApplicationState) Globals.getApplicationState();
-            UBTLaunchConfiguration oldConfig = appState.getUBTLaunchConfiguration();
-            if (oldConfig == null) {
-                Log.e(TAG, "apply: no running UBTLaunchConfiguration, is the guest actually started?");
-                return;
-            }
-
-            String evalArg = "eval \"wine '" + EXE_GUEST_PATH + "' " + (enabled ? "on" : "off") + "\"";
-
-            UBTLaunchConfiguration newConfig = new UBTLaunchConfiguration();
-            // Clone the running session's context so we attach to the SAME
-            // wineserver/X display instead of a disconnected one - this is
-            // the part a from-scratch UBTLaunchConfiguration gets wrong.
-            newConfig.setFsRoot(oldConfig.getFsRoot());
-            newConfig.setGuestExecutablePath(oldConfig.getGuestExecutablePath());
-            newConfig.setGuestEnvironmentVariables(oldConfig.getGuestEnvironmentVariables());
-            newConfig.setVfsHacks(oldConfig.getVfsHacks());
-            newConfig.setSocketPathSuffix(oldConfig.getSocketPathSuffix());
-
-            // guestExecutable must be something execve()-able directly
-            // (ELF or a script with a shebang) - never the .exe itself.
-            newConfig.setGuestExecutable(shPath);
-            newConfig.setGuestArguments(Arrays.asList(shPath, evalArg));
-
-            appState.getEnvironment()
-                    .getComponent(com.eltechs.axs.environmentService.components.GuestApplicationsTrackerComponent.class)
-                    .startGuestApplication(newConfig);
-        } catch (Exception e) {
-            Log.e(TAG, "apply: failed to toggle refactor size", e);
-        }
+        enabled = !enabled;
+        apply(enabled);
     }
 
     /**
-     * Writes the tiny "#!/bin/bash\neval "$@"" wrapper used by every
-     * one-off guest command in this codebase (see OptionTaskMgr.getShPath())
-     * and returns its path relative to the exagear image root, i.e. the
-     * path the guest side (UBT) understands.
+     * Called once per container launch by WinHandlerMini.prepareForLaunch().
+     * Resets the on/off flag AND deletes any refactorsize.dat left over
+     * from a previous session - that file's saved HWND can never be valid
+     * again once the wine/X session that created it is gone, so leaving
+     * either of these around invites the exact stale-state bug this
+     * revision fixes. Safe/idempotent to call even with nothing to clean up.
      */
-    private static String stageWrapperScript() {
-        File imagePath = ((ExagearImageAware) Globals.getApplicationState()).getExagearImage().getPath();
-        File shFile = new File(QH.Files.edPatchDir(), WRAPPER_SCRIPT_NAME);
+    static void resetForNewSession() {
+        enabled = false;
         try {
-            if (!shFile.exists()) {
-                FileUtils.writeStringToFile(shFile, "#!/bin/bash\neval \"$@\"");
-                //noinspection ResultOfMethodCallIgnored
-                shFile.setExecutable(true, false);
+            File dat = new File(QH.Files.edPatchDir(), "refactorsize.dat");
+            if (dat.exists() && dat.delete()) {
+                Log.i(TAG, "resetForNewSession: removed stale refactorsize.dat from a previous session");
             }
         } catch (Exception e) {
-            Log.e(TAG, "stageWrapperScript: failed to write wrapper script", e);
+            Log.e(TAG, "resetForNewSession: failed to clear stale state", e);
         }
-        return shFile.getAbsolutePath().replace(imagePath.getAbsolutePath(), "");
+    }
+
+    private static void apply(boolean enabled) {
+        stageHelperExe();
+        WinHandlerMini.get().exec(EXE_GUEST_PATH, enabled ? "on" : "off");
     }
 
     /**
@@ -133,8 +93,8 @@ public class RefactorSizeHelper {
             File dst = new File(QH.Files.edPatchDir(), "refactorsize.exe");
             if (dst.exists() && dst.length() == HELPER_EXE_BYTES) return;
 
-            try (InputStream in = Globals.getAppContext().getAssets().open("refactorsize/refactorsize.exe");
-                 FileOutputStream out = new FileOutputStream(dst)) {
+            try (java.io.InputStream in = Globals.getAppContext().getAssets().open("refactorsize/refactorsize.exe");
+                 java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
                 byte[] buf = new byte[64 * 1024];
                 int n;
                 while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
