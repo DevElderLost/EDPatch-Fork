@@ -22,37 +22,32 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Android-side counterpart to winhandler_mini.exe (see
  * app/src/main/cpp/winhandler-mini/winhandler_mini.c for the guest side).
  *
- * v2: eager start. Checked against how Winlator itself actually launches
- * its own winhandler.exe (XServerDisplayActivity#setupXEnvironment() /
- * getWineStartCommand()): it's baked directly into the SAME guestExecutable
- * string as the main exe -
+ * v3: fixes a cross-session state leak introduced in v2. v2 gated
+ * prepareForLaunch()/injectIntoCommand() behind an AtomicBoolean that
+ * latched permanently "true" the first time a container was launched -
+ * the assumption was that in-memory state naturally resets every session
+ * because the Android process gets recreated, mirroring how Winlator's
+ * XServerDisplayActivity#isRefactorSizeEnabled (a plain instance field)
+ * resets automatically when the Activity is recreated.
  *
- *   wine explorer /desktop=shell,WxH winhandler.exe /dir <path> "game.exe" ...
+ * That assumption was wrong for EDPatch-Fork: the app process stays alive
+ * across "exit container, re-enter container" (confirmed from
+ * x86-stderr(-first).txt - winhandler_mini.exe launches identically both
+ * times, so the guest side was always fine; the bug was static Java state
+ * on the Android side never getting reset). A permanent latch is exactly
+ * as broken as the original SharedPreferences bug, just moved from disk
+ * to RAM.
  *
- * - i.e. one single guest process spawn, winhandler.exe running from the
- * very first frame, long before the user could ever reach an options menu.
- * v1 of this class instead lazily spawned the daemon on the FIRST toggle
- * click (a second, separate UBTLaunchConfiguration) - that has a real race:
- * exec() drops silently if the daemon's INIT packet hasn't arrived yet, so
- * the very first click right after entering a container could silently do
- * nothing. This revision fixes that by hooking into StartGuest.execute()
- * (see the two call sites added there: prepareForLaunch() +
- * injectIntoCommand()) so winhandler_mini.exe launches in the background of
- * the SAME guest process spawn as the main exe/game - matching Winlator's
- * pattern exactly, just via a shell `&` instead of making the daemon itself
- * the parent process (keeps winhandler_mini.c simpler, no need for it to
- * know how to CreateProcess the actual game).
- *
- * ensureStartedFallback() is kept as a defensive fallback for any launch
- * path that doesn't go through the patched StartGuest.execute() (e.g. a
- * future/alternate startup action) - it's a no-op once the eager path has
- * already claimed daemonClaimed.
+ * Fix: state is now reset EXPLICITLY every time prepareForLaunch() runs,
+ * instead of relying on process death. prepareForLaunch() is already
+ * called once per container launch from StartGuest.execute() (see the
+ * smali patch), so this is a reliable "a new session is starting" signal
+ * regardless of whether the process itself is fresh or reused.
  */
 public class WinHandlerMini {
     private static final String TAG = "WinHandlerMini";
@@ -71,10 +66,11 @@ public class WinHandlerMini {
 
     private static final WinHandlerMini INSTANCE = new WinHandlerMini();
 
-    /** Whichever path (eager StartGuest hook or the fallback) gets there
-     * first wins; the other becomes a no-op. In-memory only (see class doc
-     * on RefactorSizeHelper for why this must never be a SharedPreference). */
-    private final AtomicBoolean daemonClaimed = new AtomicBoolean(false);
+    /** True only between a prepareForLaunch() call and the matching
+     * injectIntoCommand() call later in the SAME StartGuest.execute()
+     * invocation - a one-shot "yes, inject" signal, not a permanent
+     * latch. */
+    private volatile boolean pendingInjection = false;
     private volatile boolean initReceived = false;
     private DatagramSocket listenSocket;
 
@@ -86,27 +82,35 @@ public class WinHandlerMini {
 
     /**
      * Call once, early in StartGuest.execute(), BEFORE the final guest
-     * command line is assembled. Stages winhandler_mini.exe on disk and
-     * starts the Android-side UDP listener. Does not launch anything in
-     * the guest by itself - pair with injectIntoCommand().
+     * command line is assembled. Runs EVERY container launch (no permanent
+     * latch) - tears down any listener left over from a previous session,
+     * resets initReceived, stages winhandler_mini.exe, and resets
+     * RefactorSizeHelper's per-session state (its enabled flag and any
+     * stale refactorsize.dat from a previous wine/X session).
      */
     public void prepareForLaunch() {
-        if (!daemonClaimed.compareAndSet(false, true)) return;
+        stopListenSocket();
+        initReceived = false;
+        pendingInjection = true;
+
         startListenSocket();
         stageDaemonExe();
+        RefactorSizeHelper.resetForNewSession();
     }
 
     /**
      * Rewrites an `eval "..."` guest command string so winhandler_mini.exe
      * launches in the background (shell `&`) of the SAME guest process
      * spawn as the main exe, right before whatever wine/game command was
-     * already there. No-op if prepareForLaunch() was never called (so it's
-     * safe to call unconditionally), or if the string doesn't look like an
-     * `eval "..."` wrapper (defensive - never breaks an unrecognized
-     * command format, just leaves it untouched).
+     * already there. Consumes the pending-injection flag set by
+     * prepareForLaunch() - only actually injects once per call to
+     * prepareForLaunch(). No-op if prepareForLaunch() wasn't called first,
+     * or if the string doesn't look like an `eval "..."` wrapper.
      */
     public String injectIntoCommand(String evalCmd) {
-        if (evalCmd == null || !daemonClaimed.get()) return evalCmd;
+        if (evalCmd == null || !pendingInjection) return evalCmd;
+        pendingInjection = false;
+
         final String marker = "eval \"";
         int idx = evalCmd.indexOf(marker);
         if (idx < 0) return evalCmd;
@@ -118,17 +122,17 @@ public class WinHandlerMini {
     /**
      * Defensive fallback only - spawns winhandler_mini.exe as its own
      * separate guest process attached to whatever UBTLaunchConfiguration
-     * is currently running. Prefer prepareForLaunch()+injectIntoCommand()
-     * wired into the container's actual startup path; this exists so
-     * RefactorSizeHelper degrades gracefully instead of hard-failing if
-     * that wiring is ever missing for some launch path.
+     * is currently running, for launch paths that don't go through the
+     * patched StartGuest.execute(). Safe to call any time; re-stages/
+     * re-arms the listener the same way prepareForLaunch() does.
      */
     public void ensureStartedFallback() {
-        if (!daemonClaimed.compareAndSet(false, true)) return;
-
-        startListenSocket();
+        if (initReceived) return; // a daemon already answered for this session
 
         try {
+            if (listenSocket == null || listenSocket.isClosed()) {
+                startListenSocket();
+            }
             stageDaemonExe();
             String shPath = stageWrapperScript();
 
@@ -137,7 +141,6 @@ public class WinHandlerMini {
                     ((UBTLaunchConfigurationAware) appState).getUBTLaunchConfiguration();
             if (oldConfig == null) {
                 Log.e(TAG, "ensureStartedFallback: no running UBTLaunchConfiguration yet");
-                daemonClaimed.set(false); // allow retry once a session exists
                 return;
             }
 
@@ -159,16 +162,12 @@ public class WinHandlerMini {
             Log.i(TAG, "ensureStartedFallback: winhandler_mini.exe launch requested (fallback path)");
         } catch (Exception e) {
             Log.e(TAG, "ensureStartedFallback: failed to start daemon", e);
-            daemonClaimed.set(false); // allow a retry on the next call
         }
     }
 
     /** Fire-and-forget: tells the already-running daemon to launch
      * `filename parameters` inside the guest. No-op until the daemon's
-     * INIT packet has actually been received (mirrors real WinHandler's
-     * initReceived gating). With the eager path wired into StartGuest,
-     * INIT should already have landed long before any caller could
-     * plausibly reach this. */
+     * INIT packet has actually been received for THIS session. */
     public void exec(String filename, String parameters) {
         if (!initReceived) {
             Log.w(TAG, "exec: daemon not ready yet (no INIT received), dropping: " + filename);
@@ -199,12 +198,17 @@ public class WinHandlerMini {
         });
     }
 
-    /** Call when tearing down the guest session (e.g. exitApp) so the
-     * daemon doesn't linger as a zombie UDP listener and so the next
-     * container session is allowed to actually relaunch it. */
+    /** Call when tearing down the guest session (e.g. exitApp), if you
+     * want the listener closed immediately rather than waiting for the
+     * next prepareForLaunch() to tear it down. Optional - prepareForLaunch()
+     * already cleans up any previous listener on its own. */
     public void stop() {
-        daemonClaimed.set(false);
+        stopListenSocket();
         initReceived = false;
+        pendingInjection = false;
+    }
+
+    private void stopListenSocket() {
         if (listenSocket != null) {
             listenSocket.close();
             listenSocket = null;
@@ -214,15 +218,16 @@ public class WinHandlerMini {
     private void startListenSocket() {
         Executors.newSingleThreadExecutor().execute(() -> {
             try {
-                listenSocket = new DatagramSocket(null);
-                listenSocket.setReuseAddress(true);
-                listenSocket.bind(new InetSocketAddress((InetAddress) null, SERVER_PORT));
+                DatagramSocket sock = new DatagramSocket(null);
+                sock.setReuseAddress(true);
+                sock.bind(new InetSocketAddress((InetAddress) null, SERVER_PORT));
+                listenSocket = sock;
 
                 byte[] recvBuf = new byte[64];
                 DatagramPacket recvPacket = new DatagramPacket(recvBuf, recvBuf.length);
 
-                while (listenSocket != null && !listenSocket.isClosed()) {
-                    listenSocket.receive(recvPacket);
+                while (listenSocket == sock && !sock.isClosed()) {
+                    sock.receive(recvPacket);
                     if (recvPacket.getLength() < 1) continue;
                     byte requestCode = recvBuf[0];
                     if (requestCode == 1 /* REQ_INIT */) {

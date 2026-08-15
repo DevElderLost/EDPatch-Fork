@@ -3,7 +3,6 @@ package com.example.datainsert.exagear.action;
 import android.util.Log;
 
 import com.eltechs.axs.Globals;
-import com.eltechs.axs.applicationState.ExagearImageAware;
 import com.example.datainsert.exagear.QH;
 
 import java.io.File;
@@ -13,50 +12,36 @@ import java.io.File;
  * window, using the same SetWindowLong/SetWindowPos technique as
  * Winlator-Ludashi-test's wn-refactor-size helper.
  *
- * v3 (this revision): fixes the "works the first time a container is
- * created, but re-entering the container makes it run with no visible
- * effect" bug. Root cause (confirmed by code inspection + comparison with
- * Winlator-Ludashi-test's XServerDisplayActivity, which does NOT have
- * this bug):
+ * v4 (this revision): fixes a second cross-session state leak, found via
+ * x86-stderr(-first).txt after v3 shipped. v3's fix ("use a plain static
+ * field instead of SharedPreferences, it'll reset itself every session")
+ * assumed the Android process gets recreated every time the container is
+ * re-entered - true for Winlator's Activity-scoped equivalent field, but
+ * NOT true here: EDPatch-Fork's process stays alive across "exit
+ * container, re-enter container" (confirmed from the logs -
+ * winhandler_mini.exe launches identically both times, so the guest side
+ * was always fine - the bug was purely static Java state on the Android
+ * side never getting reset). A static field with no explicit reset is
+ * exactly as broken as the original SharedPreferences bug, just moved
+ * from disk to RAM - same symptom: works once on a fresh container, does
+ * nothing after re-entering.
  *
- *   1. The old code stored on/off state in a SharedPreferences boolean.
- *      That boolean survives app restarts, but the HWND saved inside
- *      refactorsize.dat is only valid for ONE wine/X session. Re-entering
- *      the container starts a brand new session with a brand new HWND,
- *      but the leftover pref still said "enabled" from last time, so the
- *      very next toggle() computed newState=false and called disable()
- *      instead of enable() - disable() read the stale HWND from the old
- *      session, IsWindow() correctly rejected it, so NOTHING visible
- *      happened, then the .dat file got deleted. The exe genuinely ran;
- *      it just had nothing valid left to act on.
- *      Winlator-Ludashi-test never hits this because its equivalent flag
- *      (XServerDisplayActivity#isRefactorSizeEnabled) is a plain in-memory
- *      field, not a SharedPreference - it naturally resets to false every
- *      time the Activity (i.e. the container session) is recreated. This
- *      revision does the same: state lives in a plain instance field.
- *
- *   2. Every toggle click used to spin up a brand new
- *      UBTLaunchConfiguration and spawn a whole new guest process just to
- *      run refactorsize.exe once - slow, and fragile (has to land in the
- *      exact same wine/X session as the game). This revision starts a
- *      single persistent guest-side daemon (winhandler_mini.exe, see
- *      app/src/main/cpp/winhandler-mini/) eagerly, backgrounded in the
- *      SAME guest process spawn as the main exe/game (patched into
- *      StartGuest.execute()) - matching exactly how Winlator launches its
- *      own winhandler.exe alongside the game - and sends it lightweight
- *      UDP commands instead of spawning anything new per toggle.
+ * Fix: `enabled` and refactorsize.dat cleanup are now reset EXPLICITLY via
+ * resetForNewSession(), called from WinHandlerMini.prepareForLaunch() -
+ * which itself is called once per container launch from
+ * StartGuest.execute() (see the smali patch). That's a reliable "a new
+ * session is starting" signal regardless of whether the process is fresh
+ * or reused, unlike relying on static field initialization.
  */
 public class RefactorSizeHelper {
     private static final String TAG = "RefactorSizeHelper";
     private static final String EXE_GUEST_PATH = "Z:\\opt\\edpatch\\refactorsize.exe";
     private static final long HELPER_EXE_BYTES = 16384L;
 
-    /** Deliberately NOT persisted (see class doc, point 1). Resets to
-     * false every time the process/Activity is recreated, which is
-     * exactly what re-entering the container should mean for this
-     * feature - matches Winlator-Ludashi-test's behavior. */
+    /** Deliberately NOT persisted - but unlike v3, do NOT rely on this
+     * merely being a static field to reset itself. It's reset explicitly
+     * by resetForNewSession() every container launch. */
     private static volatile boolean enabled = false;
-    private static volatile boolean staleStateCleared = false;
 
     public static boolean isEnabled() {
         return enabled;
@@ -69,36 +54,34 @@ public class RefactorSizeHelper {
         // injectIntoCommand()). Only actually spawns anything if that eager
         // path was somehow skipped for this launch.
         WinHandlerMini.get().ensureStartedFallback();
-        clearStaleStateOnce();
 
         enabled = !enabled;
         apply(enabled);
     }
 
-    private static void apply(boolean enabled) {
-        stageHelperExe();
-        WinHandlerMini.get().exec(EXE_GUEST_PATH, enabled ? "on" : "off");
-    }
-
     /**
-     * Deletes any refactorsize.dat left over from a previous, possibly
-     * force-killed session, exactly once per session, the first time this
-     * feature is used. That file's saved HWND can never be valid again
-     * once the wine/X session that created it is gone, so leaving it
-     * around only invites the exact stale-state bug this revision fixes.
-     * Safe/idempotent - a missing file is simply a no-op.
+     * Called once per container launch by WinHandlerMini.prepareForLaunch().
+     * Resets the on/off flag AND deletes any refactorsize.dat left over
+     * from a previous session - that file's saved HWND can never be valid
+     * again once the wine/X session that created it is gone, so leaving
+     * either of these around invites the exact stale-state bug this
+     * revision fixes. Safe/idempotent to call even with nothing to clean up.
      */
-    private static void clearStaleStateOnce() {
-        if (staleStateCleared) return;
-        staleStateCleared = true;
+    static void resetForNewSession() {
+        enabled = false;
         try {
             File dat = new File(QH.Files.edPatchDir(), "refactorsize.dat");
             if (dat.exists() && dat.delete()) {
-                Log.i(TAG, "clearStaleStateOnce: removed stale refactorsize.dat from a previous session");
+                Log.i(TAG, "resetForNewSession: removed stale refactorsize.dat from a previous session");
             }
         } catch (Exception e) {
-            Log.e(TAG, "clearStaleStateOnce: failed to clear stale state", e);
+            Log.e(TAG, "resetForNewSession: failed to clear stale state", e);
         }
+    }
+
+    private static void apply(boolean enabled) {
+        stageHelperExe();
+        WinHandlerMini.get().exec(EXE_GUEST_PATH, enabled ? "on" : "off");
     }
 
     /**
