@@ -46,7 +46,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class WinHandlerMini {
     private static final String TAG = "WinHandlerMini";
 
-    private static final long DAEMON_EXE_BYTES = 16384L;
+    private static final long DAEMON_EXE_BYTES = 17408L;
     private static final String DAEMON_EXE_NAME = "winhandler_mini.exe";
     private static final String WRAPPER_SCRIPT_NAME = "run-winhandler-mini.sh";
     private static final String DAEMON_GUEST_PATH = "Z:\\opt\\edpatch\\winhandler_mini.exe";
