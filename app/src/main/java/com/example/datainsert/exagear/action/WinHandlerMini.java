@@ -54,6 +54,19 @@ public class WinHandlerMini {
 
     private static final WinHandlerMini INSTANCE = new WinHandlerMini();
 
+    /** Captured from StartGuest's getWineOptions() (e.g. "explorer
+     * /desktop=shell,800x600") right before the final command is
+     * assembled - see setDesktopSpec(). Needed because Wine isolates
+     * windows by desktop: the game runs inside a NAMED virtual desktop
+     * ("shell"/"xdroid"), and a process launched without that same
+     * /desktop= qualifier runs on a completely separate window-station,
+     * where GetForegroundWindow() can never see the game's window no
+     * matter how correctly everything else works. winhandler_mini.exe
+     * (and refactorsize.exe, launched as its child) MUST share the exact
+     * same desktop spec as the game or window manipulation is silently
+     * a no-op forever, regardless of session. */
+    private volatile String desktopSpec = null;
+
     /** True only between a prepareForLaunch() call and the matching
      * injectIntoCommand() call later in the SAME StartGuest.execute()
      * invocation - a one-shot "yes, inject" signal, not a permanent
@@ -88,6 +101,20 @@ public class WinHandlerMini {
     }
 
     /**
+     * Captures the exact "explorer /desktop=shell,WxH" (or "xdroid"
+     * variant) string StartGuest computed for the main exe, so
+     * injectIntoCommand() can launch winhandler_mini.exe inside the SAME
+     * virtual desktop as the game. Call this right after
+     * getWineOptions()/wineOptions is computed in StartGuest.execute(),
+     * before injectIntoCommand(). Safe to call with null/empty (falls
+     * back to no desktop qualifier, reproducing the old - broken -
+     * behavior, better than crashing).
+     */
+    public void setDesktopSpec(String wineOptions) {
+        desktopSpec = wineOptions;
+    }
+
+    /**
      * Rewrites an `eval "..."` guest command string so winhandler_mini.exe
      * launches in the background (shell `&`) of the SAME guest process
      * spawn as the main exe, right before whatever wine/game command was
@@ -104,7 +131,16 @@ public class WinHandlerMini {
         int idx = evalCmd.indexOf(marker);
         if (idx < 0) return evalCmd;
         int insertAt = idx + marker.length();
-        String daemonLaunch = "wine '" + DAEMON_GUEST_PATH + "' & ";
+
+        String daemonLaunch;
+        if (desktopSpec != null && !desktopSpec.isEmpty()) {
+            // Same virtual desktop as the game - required for
+            // GetForegroundWindow() inside refactorsize.exe to ever see
+            // the game's window at all (see desktopSpec's field doc).
+            daemonLaunch = "wine " + desktopSpec + " '" + DAEMON_GUEST_PATH + "' & ";
+        } else {
+            daemonLaunch = "wine '" + DAEMON_GUEST_PATH + "' & ";
+        }
         return evalCmd.substring(0, insertAt) + daemonLaunch + evalCmd.substring(insertAt);
     }
 
