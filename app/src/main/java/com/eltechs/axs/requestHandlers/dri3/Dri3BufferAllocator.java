@@ -2,7 +2,7 @@ package com.eltechs.axs.requestHandlers.dri3;
 
 /**
  * TIDAK ADA padanan kelas ini di codebase asli - saya cek seluruh 22 .so,
- * nol referensi AHardwareBuffer_*/ASurfaceControl_*/ASurfaceTransaction_*.
+ * nol referensi AHardwareBuffer_ / ASurfaceControl_ / ASurfaceTransaction_.
  * Ini benar-benar subsistem baru, native side harus ditulis dari nol
  * (lib baru, misal libdri3-helpers.so, di-load via System.loadLibrary di <clinit>).
  *
