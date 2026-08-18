@@ -30,14 +30,14 @@ public final class PresentRequests extends HandlerObjectBase {
     }
 
     private void handleQueryVersion(XClient client, int seq, byte minorOpcode,
-                                     XRequest request, XResponse response) {
+                                     XRequest request, XResponse response) throws java.io.IOException {
         request.readInt();
         request.readInt();
         response.sendSuccessReply((byte) 1, Version.MAJOR, Version.MINOR);
     }
 
     private void handlePixmap(XClient client, int seq, byte minorOpcode,
-                               XRequest request, XResponse response) {
+                               XRequest request, XResponse response) throws java.io.IOException {
         int window = request.readInt();
         int pixmap = request.readInt();
         request.readInt();   // serial
@@ -81,7 +81,7 @@ public final class PresentRequests extends HandlerObjectBase {
     }
 
     private void handleQueryCapabilities(XClient client, int seq, byte minorOpcode,
-                                          XRequest request, XResponse response) {
+                                          XRequest request, XResponse response) throws java.io.IOException {
         request.readInt();
         response.sendSuccessReply((byte) 1, 0);
     }
