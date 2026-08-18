@@ -1,6 +1,5 @@
 package com.eltechs.axs.requestHandlers.dri3;
 
-import com.eltechs.axs.proto.input.OpcodeHandler;
 import com.eltechs.axs.proto.input.ConfigurableRequestsDispatcher;
 import com.eltechs.axs.requestHandlers.HandlerObjectBase;
 import com.eltechs.axs.xserver.XServer;
@@ -9,16 +8,20 @@ import com.eltechs.axs.xconnectors.XRequest;
 import com.eltechs.axs.xconnectors.XResponse;
 
 /**
- * REVISI KE-3 - perbaiki bug API: client.getOutputStream()/request.getInputStream()
- * yg dipakai di revisi ke-2 TIDAK ADA di XClient/XRequest asli (sudah dicek ulang
- * dump lengkap kedua kelas itu - XClient cuma expose outputStream lewat constructor,
- * XRequest cuma expose inputStream sbg private field, keduanya TANPA getter publik).
+ * REVISI KE-4 - perbaikan dari build error nyata (GitHub Actions log, 17 Agt):
+ * 1. BadAlloc TIDAK ADA di codebase asli - dibuat baru (lihat
+ *    proto/input/errors/BadAlloc.smali), pola persis BadPixmap/BadWindow.
+ * 2. BadPixmap(int)/BadWindow(int) BUTUH argumen id resource yg bermasalah,
+ *    bukan constructor kosong - sebelumnya salah tulis new BadPixmap().
+ * 3. createPixmapFromFd sekarang match persis signature Dri3BufferAllocator
+ *    yg SUDAH DIPERBAIKI (nambah XServer sbg parameter pertama - lihat
+ *    Dri3BufferAllocator.java revisi terbaru).
  *
- * Perbaikan: sendReplyWithFd() ditaruh SEBAGAI METHOD BARU DI DALAM XResponse itu
- * sendiri (bisa akses this.outputStream langsung, sama-sama private tapi 1 kelas).
- * dequeueReceivedFd() ditaruh SEBAGAI METHOD BARU DI DALAM XRequest itu sendiri
- * (akses this.inputStream langsung). Lihat XResponse.patch.txt & XRequest.patch.txt
- * (baru) utk definisi kedua method itu.
+ * CATATAN BUILD ORDER: sendReplyWithFd()/dequeueReceivedFd() di sini HANYA
+ * akan ketemu simbolnya kalau XResponse.smali & XRequest.smali SUDAH
+ * dipatch+rebuild LEBIH DULU sebelum compile file ini. Kalau masih error
+ * "cannot find symbol" utk 2 method itu setelah fix2 lain di atas, artinya
+ * urutan build salah - patch XResponse/XRequest dulu, baru compile file ini.
  */
 public final class DRI3Requests extends HandlerObjectBase {
 
@@ -45,16 +48,18 @@ public final class DRI3Requests extends HandlerObjectBase {
 
     private void handleOpen(XClient client, int seq, byte minorOpcode,
                              XRequest request, XResponse response) {
-        request.readInt(); // drawable
+        int drawable = request.readInt();
         request.readInt(); // provider (diabaikan - Android single-GPU)
 
         int deviceFd = bufferAllocator.openRenderNodeFd();
         if (deviceFd < 0) {
-            response.sendError(new com.eltechs.axs.proto.input.errors.BadAlloc());
+            // BadAlloc(int): tidak ada "resource id" yg benar2 pas di sini
+            // (kegagalan alokasi fd, bukan soal resource X11 tertentu) - pakai
+            // `drawable` sbg data diagnostik (setidaknya nunjuk drawable mana
+            // yg lagi diminta saat gagal), bukan makna protokol yg baku.
+            response.sendError(new com.eltechs.axs.proto.input.errors.BadAlloc(drawable));
             return;
         }
-        // response.sendReplyWithFd() internal sudah handle lock+flush+writeWithFd,
-        // gak perlu try-with-resources manual lagi di sini (beda dari revisi ke-2).
         response.sendReplyWithFd((byte) 1, seq, deviceFd, null);
     }
 
@@ -69,9 +74,9 @@ public final class DRI3Requests extends HandlerObjectBase {
         int depth = request.readByte() & 0xFF;
         int bpp = request.readByte() & 0xFF;
 
-        int bufferFd = request.dequeueReceivedFd(); // method baru di XRequest, lihat patch
+        int bufferFd = request.dequeueReceivedFd();
         if (bufferFd < 0) {
-            response.sendError(new com.eltechs.axs.proto.input.errors.BadAlloc());
+            response.sendError(new com.eltechs.axs.proto.input.errors.BadAlloc(newPixmapId));
             return;
         }
         bufferAllocator.createPixmapFromFd(getXServer(), newPixmapId, bufferFd,
@@ -83,7 +88,7 @@ public final class DRI3Requests extends HandlerObjectBase {
         int pixmap = request.readInt();
         Dri3BufferAllocator.BufferInfo info = bufferAllocator.exportPixmapAsFd(pixmap);
         if (info == null) {
-            response.sendError(new com.eltechs.axs.proto.input.errors.BadPixmap());
+            response.sendError(new com.eltechs.axs.proto.input.errors.BadPixmap(pixmap));
             return;
         }
         response.sendReplyWithFd((byte) 1, seq, info.fd, info);
