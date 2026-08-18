@@ -76,6 +76,13 @@ public class XRequest {
         return this.nBytesRemaining;
     }
 
+    /* DUMMY: stub kompatibilitas untuk DRI3Requests. XRequest tidak punya
+       jalur penerimaan file descriptor asli, jadi selalu mengembalikan -1
+       (menandakan tidak ada fd valid yang diterima). */
+    public int dequeueReceivedFd() {
+        return -1;
+    }
+
     private void updateRemainingBytesCount(int i) {
         Assert.state(this.nBytesRemaining >= i);
         this.nBytesRemaining -= i;

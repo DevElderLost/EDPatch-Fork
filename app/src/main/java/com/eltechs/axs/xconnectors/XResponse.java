@@ -191,6 +191,12 @@ public class XResponse {
         sendReply(true, (byte) 1, b, 0, objArr);
     }
 
+    /* DUMMY: stub kompatibilitas untuk DRI3Requests (fd tidak benar-benar dikirim).
+       Cocok dengan pemanggilan: sendReplyWithFd((byte) 1, seq, deviceFd, null) */
+    public void sendReplyWithFd(byte b, int i, int i2, Object obj) throws IOException {
+        sendReply(true, (byte) 1, b, 0, new Object[0]);
+    }
+
     public void sendSuccessReply(byte b, Object... objArr) throws IOException {
         sendReply(false, (byte) 1, b, ProtoHelpers.calculateLengthInWords(PODWriter.getOnWireLength(objArr)), objArr);
     }
