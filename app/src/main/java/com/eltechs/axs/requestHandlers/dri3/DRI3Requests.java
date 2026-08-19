@@ -42,7 +42,7 @@ public final class DRI3Requests extends HandlerObjectBase {
     }
 
     private void handleOpen(XClient client, int seq, byte minorOpcode,
-                             XRequest request, XResponse response) {
+                             XRequest request, XResponse response) throws java.io.IOException {
         request.readInt(); // drawable (diabaikan, sama spt Winlator - cuma dibaca lalu tidak dipakai)
         request.readInt(); // provider (diabaikan)
 
