@@ -35,7 +35,7 @@ public final class DRI3Requests extends HandlerObjectBase {
     }
 
     private void handleQueryVersion(XClient client, int seq, byte minorOpcode,
-                                     XRequest request, XResponse response) {
+                                     XRequest request, XResponse response) throws java.io.IOException {
         request.readInt();
         request.readInt();
         response.sendSuccessReply((byte) 1, Version.MAJOR, Version.MINOR);
@@ -55,7 +55,7 @@ public final class DRI3Requests extends HandlerObjectBase {
     }
 
     private void handlePixmapFromBuffer(XClient client, int seq, byte minorOpcode,
-                                         XRequest request, XResponse response) {
+                                         XRequest request, XResponse response) throws java.io.IOException {
         int newPixmapId = request.readInt();
         int drawable = request.readInt();
         request.readInt(); // size
@@ -79,7 +79,7 @@ public final class DRI3Requests extends HandlerObjectBase {
     }
 
     private void handleBufferFromPixmap(XClient client, int seq, byte minorOpcode,
-                                         XRequest request, XResponse response) {
+                                         XRequest request, XResponse response) throws java.io.IOException {
         int pixmap = request.readInt();
         Dri3BufferAllocator.BufferInfo info = bufferAllocator.exportPixmapAsFd(pixmap);
         if (info == null) {
