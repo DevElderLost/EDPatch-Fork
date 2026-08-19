@@ -8,20 +8,15 @@ import com.eltechs.axs.xconnectors.XRequest;
 import com.eltechs.axs.xconnectors.XResponse;
 
 /**
- * REVISI KE-4 - perbaikan dari build error nyata (GitHub Actions log, 17 Agt):
- * 1. BadAlloc TIDAK ADA di codebase asli - dibuat baru (lihat
- *    proto/input/errors/BadAlloc.smali), pola persis BadPixmap/BadWindow.
- * 2. BadPixmap(int)/BadWindow(int) BUTUH argumen id resource yg bermasalah,
- *    bukan constructor kosong - sebelumnya salah tulis new BadPixmap().
- * 3. createPixmapFromFd sekarang match persis signature Dri3BufferAllocator
- *    yg SUDAH DIPERBAIKI (nambah XServer sbg parameter pertama - lihat
- *    Dri3BufferAllocator.java revisi terbaru).
+ * REVISI KE-5 - handleOpen() DITULIS ULANG mengikuti Winlator persis
+ * (dikonfirmasi baca app/src/main/java/.../DRI3Extension.java Winlator-Ludashi-test):
+ * DRI3Open TIDAK PERNAH kirim fd device - cuma reply sukses kosong. Buffer
+ * sharing sepenuhnya lewat AHardwareBuffer di PixmapFromBuffer (lihat
+ * Dri3BufferAllocator.importDmaBufFd yg sudah ditulis ulang total jadi
+ * AHardwareBuffer_recvHandleFromUnixSocket, BUKAN dma-buf lagi).
  *
- * CATATAN BUILD ORDER: sendReplyWithFd()/dequeueReceivedFd() di sini HANYA
- * akan ketemu simbolnya kalau XResponse.smali & XRequest.smali SUDAH
- * dipatch+rebuild LEBIH DULU sebelum compile file ini. Kalau masih error
- * "cannot find symbol" utk 2 method itu setelah fix2 lain di atas, artinya
- * urutan build salah - patch XResponse/XRequest dulu, baru compile file ini.
+ * openRenderNodeFd() DIHAPUS TOTAL dari sini (dan dari Dri3BufferAllocator.java)
+ * - sudah tidak relevan, /dev/dri tidak pernah dibutuhkan lagi dgn pendekatan ini.
  */
 public final class DRI3Requests extends HandlerObjectBase {
 
@@ -40,31 +35,27 @@ public final class DRI3Requests extends HandlerObjectBase {
     }
 
     private void handleQueryVersion(XClient client, int seq, byte minorOpcode,
-                                     XRequest request, XResponse response) throws java.io.IOException {
+                                     XRequest request, XResponse response) {
         request.readInt();
         request.readInt();
         response.sendSuccessReply((byte) 1, Version.MAJOR, Version.MINOR);
     }
 
     private void handleOpen(XClient client, int seq, byte minorOpcode,
-                             XRequest request, XResponse response) throws java.io.IOException {
-        int drawable = request.readInt();
-        request.readInt(); // provider (diabaikan - Android single-GPU)
+                             XRequest request, XResponse response) {
+        request.readInt(); // drawable (diabaikan, sama spt Winlator - cuma dibaca lalu tidak dipakai)
+        request.readInt(); // provider (diabaikan)
 
-        int deviceFd = bufferAllocator.openRenderNodeFd();
-        if (deviceFd < 0) {
-            // BadAlloc(int): tidak ada "resource id" yg benar2 pas di sini
-            // (kegagalan alokasi fd, bukan soal resource X11 tertentu) - pakai
-            // `drawable` sbg data diagnostik (setidaknya nunjuk drawable mana
-            // yg lagi diminta saat gagal), bukan makna protokol yg baku.
-            response.sendError(new com.eltechs.axs.proto.input.errors.BadAlloc(drawable));
-            return;
-        }
-        response.sendReplyWithFd((byte) 1, seq, deviceFd, null);
+        // TIDAK ADA fd dikirim sama sekali - persis DRI3Extension.java Winlator.
+        // sendReplyWithFd/writeWithFd TIDAK DIPAKAI LAGI di sini - kembali ke
+        // reply biasa (sendSuccessReply dgn nol field tambahan = 32-byte
+        // reply kosong, sesuai spec: DRI3Open reply memang tidak wajib fd
+        // kalau server tidak menyediakan device node asli).
+        response.sendSuccessReply((byte) 1);
     }
 
     private void handlePixmapFromBuffer(XClient client, int seq, byte minorOpcode,
-                                         XRequest request, XResponse response) throws java.io.IOException {
+                                         XRequest request, XResponse response) {
         int newPixmapId = request.readInt();
         int drawable = request.readInt();
         request.readInt(); // size
@@ -74,6 +65,10 @@ public final class DRI3Requests extends HandlerObjectBase {
         int depth = request.readByte() & 0xFF;
         int bpp = request.readByte() & 0xFF;
 
+        // fd ini SEKARANG socketpair fd (protokol Winlator), BUKAN dma-buf -
+        // lihat Dri3BufferAllocator.importDmaBufFd yg sudah ditulis ulang.
+        // Mekanisme AMBIL fd dari SCM_RIGHTS-nya SENDIRI (dequeueReceivedFd)
+        // TIDAK BERUBAH - itu independen dari apa ISI/MAKNA fd-nya.
         int bufferFd = request.dequeueReceivedFd();
         if (bufferFd < 0) {
             response.sendError(new com.eltechs.axs.proto.input.errors.BadAlloc(newPixmapId));
@@ -84,7 +79,7 @@ public final class DRI3Requests extends HandlerObjectBase {
     }
 
     private void handleBufferFromPixmap(XClient client, int seq, byte minorOpcode,
-                                         XRequest request, XResponse response) throws java.io.IOException {
+                                         XRequest request, XResponse response) {
         int pixmap = request.readInt();
         Dri3BufferAllocator.BufferInfo info = bufferAllocator.exportPixmapAsFd(pixmap);
         if (info == null) {

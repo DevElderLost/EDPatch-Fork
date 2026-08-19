@@ -3,12 +3,16 @@ package com.eltechs.axs.requestHandlers.dri3;
 import com.eltechs.axs.xserver.XServer;
 
 /**
- * REVISI - createPixmapFromFd sekarang terima XServer sbg parameter pertama
- * (bug sebelumnya: DRI3Requests.java manggil dgn getXServer() sbg arg pertama
- * tapi method ini cuma declare 7 param tanpa XServer - "actual and formal
- * argument lists differ in length" di build log Anda). XServer memang WAJIB
- * di sini krn method ini perlu akses xServer.getPixmapsManager().createPixmap()
- * utk daftarkan Dri3ImportedDrawable yg baru dibuat - bukan optional.
+ * REVISI KE-2 - openRenderNodeFd() DIHAPUS TOTAL. Pendekatan lama (buka
+ * /dev/dri/renderD1xx, kirim sbg device fd DRI3Open) TERBUKTI GAGAL di
+ * device nyata (SELinux blokir /dev/dri, fallback /dev/null bikin Vulkan
+ * surface creation gagal - lihat CHANGELOG native).
+ *
+ * SEKARANG mengikuti mekanisme Winlator (dikonfirmasi baca source
+ * Winlator-Ludashi-test langsung): DRI3Open tidak kirim fd sama sekali,
+ * buffer sharing lewat AHardwareBuffer (importDmaBufFd namanya TETAP SAMA
+ * - cuma nama peninggalan revisi lama - tapi ISI implementasinya di C
+ * SEKARANG AHardwareBuffer_recvHandleFromUnixSocket, BUKAN dma-buf).
  */
 public final class Dri3BufferAllocator {
 
@@ -23,35 +27,27 @@ public final class Dri3BufferAllocator {
         public int depth, bpp;
     }
 
-    public native int openRenderNodeFd();
-    public native long allocateBuffer(int width, int height, int format, long usage);
-    public native int exportBufferFd(long bufferHandle);
     public native void releaseBuffer(long bufferHandle);
-    public native long importDmaBufFd(int fd, int width, int height, int stride, int format);
 
-    public int openRenderNodeFdOrThrow() {
-        int fd = openRenderNodeFd();
-        if (fd < 0) throw new IllegalStateException("DRI3: gagal buka device fd");
-        return fd;
-    }
+    // NAMA MENYESATKAN (peninggalan) - fd di sini socketpair fd protokol
+    // Winlator, BUKAN dma-buf. width/height/stride/format TIDAK DIPAKAI lagi
+    // di native (AHardwareBuffer bawa metadata sendiri) - tetap dipertahankan
+    // di signature biar caller (createPixmapFromFd di bawah) tidak perlu diubah.
+    public native long importDmaBufFd(int fd, int width, int height, int stride, int format);
 
     public void createPixmapFromFd(XServer xServer, int pixmapId, int fd, int width, int height,
                                     int stride, int depth, int bpp) {
-        int drmFormat = (depth == 32) ? 1 /*ARGB8888*/ : 4 /*RGB565*/;
+        int drmFormat = (depth == 32) ? 1 /*ARGB8888*/ : 4 /*RGB565*/; // sudah tidak dipakai native, dibiarkan utk kompatibilitas signature
         long imported = importDmaBufFd(fd, width, height, stride, drmFormat);
         if (imported == 0) {
-            // import gagal (EGL_NO_IMAGE) - jangan daftarkan pixmap rusak
+            // import gagal (AHardwareBuffer_recvHandleFromUnixSocket gagal, atau
+            // eglCreateImageKHR gagal) - jangan daftarkan pixmap rusak
             return;
         }
         // TODO: root Window dan Visual HARUS diambil dari window yg valid
         // (constraint object-identity Visual - lihat catatan Present sebelumnya),
-        // BUKAN null. Ini masih placeholder krn PixmapFromBuffer sendiri belum
-        // tentu punya window context langsung (constructor Dri3ImportedDrawable
-        // saat ini expect root+visual eksplisit) - perlu XServer punya root
-        // window default yg bisa dipakai di sini, atau constructor perlu
-        // direvisi terima null sementara & diisi belakangan saat PresentPixmap
-        // beneran assign ke window (lebih match kapan Visual constraint itu
-        // sebenarnya dicek, yaitu di replaceBackingStores, bukan di sini).
+        // BUKAN null. Masih placeholder - lihat catatan lengkap di revisi
+        // sebelumnya, belum berubah statusnya.
         com.eltechs.axs.requestHandlers.dri3.Dri3ImportedDrawable drawable =
                 new com.eltechs.axs.requestHandlers.dri3.Dri3ImportedDrawable(
                         pixmapId, xServer.getWindowsManager().getRootWindow(),
@@ -60,6 +56,6 @@ public final class Dri3BufferAllocator {
     }
 
     public BufferInfo exportPixmapAsFd(int pixmapId) {
-        return null; // stub - lihat catatan sebelumnya (butuh eglExportDMABUFImageMESA)
+        return null; // stub - belum diimplementasikan (jalur guest<-host, kasus lebih jarang)
     }
 }
