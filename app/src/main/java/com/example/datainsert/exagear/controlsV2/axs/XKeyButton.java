@@ -8,13 +8,39 @@ import java.util.Objects;
 public class XKeyButton {
     /** 以安卓的KeyCode为索引,对应元素是 Key.Info的数组，用于处理安卓输入法输入的文字/按键 */
     public static Info[] aKeyIndexedArr = new Info[KeyEvent.getMaxKeyCode()+1];
-    /** 记录x keycode对应的显示名称*/
-    public static String[] xKeyNameArr = new String[0x300+7];
+    /** 记录x keycode对应的显示名称。范围要覆盖到 GAMEPAD_MASK 区间，见下方 GAMEPAD_MASK 说明 */
+    public static String[] xKeyNameArr = new String[0x300+0x40];
     public static final int POINTER_LEFT = 1;
     public static final int POINTER_CENTER = 2;
     public static final int POINTER_RIGHT = 3;
     public static final int POINTER_SCROLL_UP = 4;
     public static final int POINTER_SCROLL_DOWN = 5;
+
+    // ===== 手柄（虚拟gamepad）按键/摇杆方向编号，与 GamepadServer/GamepadState 的 IDX_BUTTON_* 对应 =====
+    public static final int GAMEPAD_A = 1;
+    public static final int GAMEPAD_B = 2;
+    public static final int GAMEPAD_X = 3;
+    public static final int GAMEPAD_Y = 4;
+    public static final int GAMEPAD_L1 = 5;
+    public static final int GAMEPAD_R1 = 6;
+    public static final int GAMEPAD_SELECT = 7;
+    public static final int GAMEPAD_START = 8;
+    public static final int GAMEPAD_L3 = 9;
+    public static final int GAMEPAD_R3 = 10;
+    public static final int GAMEPAD_L2 = 11;
+    public static final int GAMEPAD_R2 = 12;
+    public static final int GAMEPAD_DPAD_UP = 13;
+    public static final int GAMEPAD_DPAD_RIGHT = 14;
+    public static final int GAMEPAD_DPAD_DOWN = 15;
+    public static final int GAMEPAD_DPAD_LEFT = 16;
+    public static final int GAMEPAD_LEFT_THUMB_UP = 17;
+    public static final int GAMEPAD_LEFT_THUMB_RIGHT = 18;
+    public static final int GAMEPAD_LEFT_THUMB_DOWN = 19;
+    public static final int GAMEPAD_LEFT_THUMB_LEFT = 20;
+    public static final int GAMEPAD_RIGHT_THUMB_UP = 21;
+    public static final int GAMEPAD_RIGHT_THUMB_RIGHT = 22;
+    public static final int GAMEPAD_RIGHT_THUMB_DOWN = 23;
+    public static final int GAMEPAD_RIGHT_THUMB_LEFT = 24;
 
     final public static Info key_esc = new Info(1,0,KeyEvent.KEYCODE_ESCAPE,"Esc");
     final public static Info key_f1 = new Info(59,0,KeyEvent.KEYCODE_F1,"F1");
@@ -136,6 +162,37 @@ public class XKeyButton {
     final public static Info pointer_scroll_down = new Info(POINTER_MASK|POINTER_SCROLL_DOWN,0,KeyEvent.KEYCODE_UNKNOWN,"Scroll\nDown");
     final public static Info pointer_body_stub = new Info(0,0,KeyEvent.KEYCODE_UNKNOWN,"MB");
 
+    /**
+     * 手柄虚拟按键的mask，用法与POINTER_MASK完全一样：大于GAMEPAD_MASK的就是手柄按键/摇杆方向，
+     * 减去GAMEPAD_MASK就是实际的 GAMEPAD_* 编号。分发逻辑见 XServerViewHolder#pressKeyOrPointer。
+     * <br/>取值要保证比POINTER_MASK能用到的范围(POINTER_MASK+5)大，避免和鼠标按键冲突。
+     */
+    public static final int GAMEPAD_MASK = POINTER_MASK + 0x20; //0x320
+    final public static Info gamepad_a = new Info(GAMEPAD_MASK|GAMEPAD_A,0,KeyEvent.KEYCODE_UNKNOWN,"A");
+    final public static Info gamepad_b = new Info(GAMEPAD_MASK|GAMEPAD_B,0,KeyEvent.KEYCODE_UNKNOWN,"B");
+    final public static Info gamepad_x = new Info(GAMEPAD_MASK|GAMEPAD_X,0,KeyEvent.KEYCODE_UNKNOWN,"X");
+    final public static Info gamepad_y = new Info(GAMEPAD_MASK|GAMEPAD_Y,0,KeyEvent.KEYCODE_UNKNOWN,"Y");
+    final public static Info gamepad_l1 = new Info(GAMEPAD_MASK|GAMEPAD_L1,0,KeyEvent.KEYCODE_UNKNOWN,"LB");
+    final public static Info gamepad_r1 = new Info(GAMEPAD_MASK|GAMEPAD_R1,0,KeyEvent.KEYCODE_UNKNOWN,"RB");
+    final public static Info gamepad_l2 = new Info(GAMEPAD_MASK|GAMEPAD_L2,0,KeyEvent.KEYCODE_UNKNOWN,"LT");
+    final public static Info gamepad_r2 = new Info(GAMEPAD_MASK|GAMEPAD_R2,0,KeyEvent.KEYCODE_UNKNOWN,"RT");
+    final public static Info gamepad_l3 = new Info(GAMEPAD_MASK|GAMEPAD_L3,0,KeyEvent.KEYCODE_UNKNOWN,"L3");
+    final public static Info gamepad_r3 = new Info(GAMEPAD_MASK|GAMEPAD_R3,0,KeyEvent.KEYCODE_UNKNOWN,"R3");
+    final public static Info gamepad_select = new Info(GAMEPAD_MASK|GAMEPAD_SELECT,0,KeyEvent.KEYCODE_UNKNOWN,"Select");
+    final public static Info gamepad_start = new Info(GAMEPAD_MASK|GAMEPAD_START,0,KeyEvent.KEYCODE_UNKNOWN,"Start");
+    final public static Info gamepad_dpad_up = new Info(GAMEPAD_MASK|GAMEPAD_DPAD_UP,0,KeyEvent.KEYCODE_UNKNOWN,"D-Pad ↑");
+    final public static Info gamepad_dpad_right = new Info(GAMEPAD_MASK|GAMEPAD_DPAD_RIGHT,0,KeyEvent.KEYCODE_UNKNOWN,"D-Pad →");
+    final public static Info gamepad_dpad_down = new Info(GAMEPAD_MASK|GAMEPAD_DPAD_DOWN,0,KeyEvent.KEYCODE_UNKNOWN,"D-Pad ↓");
+    final public static Info gamepad_dpad_left = new Info(GAMEPAD_MASK|GAMEPAD_DPAD_LEFT,0,KeyEvent.KEYCODE_UNKNOWN,"D-Pad ←");
+    final public static Info gamepad_left_thumb_up = new Info(GAMEPAD_MASK|GAMEPAD_LEFT_THUMB_UP,0,KeyEvent.KEYCODE_UNKNOWN,"L-Stick ↑");
+    final public static Info gamepad_left_thumb_right = new Info(GAMEPAD_MASK|GAMEPAD_LEFT_THUMB_RIGHT,0,KeyEvent.KEYCODE_UNKNOWN,"L-Stick →");
+    final public static Info gamepad_left_thumb_down = new Info(GAMEPAD_MASK|GAMEPAD_LEFT_THUMB_DOWN,0,KeyEvent.KEYCODE_UNKNOWN,"L-Stick ↓");
+    final public static Info gamepad_left_thumb_left = new Info(GAMEPAD_MASK|GAMEPAD_LEFT_THUMB_LEFT,0,KeyEvent.KEYCODE_UNKNOWN,"L-Stick ←");
+    final public static Info gamepad_right_thumb_up = new Info(GAMEPAD_MASK|GAMEPAD_RIGHT_THUMB_UP,0,KeyEvent.KEYCODE_UNKNOWN,"R-Stick ↑");
+    final public static Info gamepad_right_thumb_right = new Info(GAMEPAD_MASK|GAMEPAD_RIGHT_THUMB_RIGHT,0,KeyEvent.KEYCODE_UNKNOWN,"R-Stick →");
+    final public static Info gamepad_right_thumb_down = new Info(GAMEPAD_MASK|GAMEPAD_RIGHT_THUMB_DOWN,0,KeyEvent.KEYCODE_UNKNOWN,"R-Stick ↓");
+    final public static Info gamepad_right_thumb_left = new Info(GAMEPAD_MASK|GAMEPAD_RIGHT_THUMB_LEFT,0,KeyEvent.KEYCODE_UNKNOWN,"R-Stick ←");
+
 
     //static块必须在这些变量之后声明，否则反射获取到的都是null
     static{
@@ -157,6 +214,7 @@ public class XKeyButton {
         //确保这些没有对应的按键名称
         xKeyNameArr[0] = null;
         xKeyNameArr[POINTER_MASK] = null;
+        xKeyNameArr[GAMEPAD_MASK] = null;
 
         //TODO 1. 没有做unicode的映射 2.exa的akeycode映射里没有手柄映射，那它是怎么支持手柄的，难道在unicodeMap里映射的？
         aKeyIndexedArr[KeyEvent.KEYCODE_UNKNOWN] = null; //确保未知按键没有映射

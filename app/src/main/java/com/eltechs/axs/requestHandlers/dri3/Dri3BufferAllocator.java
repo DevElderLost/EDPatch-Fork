@@ -3,16 +3,11 @@ package com.eltechs.axs.requestHandlers.dri3;
 import com.eltechs.axs.xserver.XServer;
 
 /**
- * REVISI KE-2 - openRenderNodeFd() DIHAPUS TOTAL. Pendekatan lama (buka
- * /dev/dri/renderD1xx, kirim sbg device fd DRI3Open) TERBUKTI GAGAL di
- * device nyata (SELinux blokir /dev/dri, fallback /dev/null bikin Vulkan
- * surface creation gagal - lihat CHANGELOG native).
- *
- * SEKARANG mengikuti mekanisme Winlator (dikonfirmasi baca source
- * Winlator-Ludashi-test langsung): DRI3Open tidak kirim fd sama sekali,
- * buffer sharing lewat AHardwareBuffer (importDmaBufFd namanya TETAP SAMA
- * - cuma nama peninggalan revisi lama - tapi ISI implementasinya di C
- * SEKARANG AHardwareBuffer_recvHandleFromUnixSocket, BUKAN dma-buf).
+ * REVISI KE-3 - REVERT ke dma-buf. openRenderNodeFd() KEMBALI ADA (dihapus
+ * sementara di revisi Winlator, sekarang perlu lagi). Native-nya (dri3_egl_import.c)
+ * sudah pakai versi multi-node-scan (renderD128..136) + logging ke
+ * image/opt/edpatch/dri3_debug.log - BELUM PERNAH benar2 dites di device,
+ * ini test pertama yang sebenarnya utk pertanyaan "apakah /dev/dri terblokir".
  */
 public final class Dri3BufferAllocator {
 
@@ -27,27 +22,26 @@ public final class Dri3BufferAllocator {
         public int depth, bpp;
     }
 
+    public native int openRenderNodeFd();
     public native void releaseBuffer(long bufferHandle);
-
-    // NAMA MENYESATKAN (peninggalan) - fd di sini socketpair fd protokol
-    // Winlator, BUKAN dma-buf. width/height/stride/format TIDAK DIPAKAI lagi
-    // di native (AHardwareBuffer bawa metadata sendiri) - tetap dipertahankan
-    // di signature biar caller (createPixmapFromFd di bawah) tidak perlu diubah.
     public native long importDmaBufFd(int fd, int width, int height, int stride, int format);
+
+    public int openRenderNodeFdOrThrow() {
+        int fd = openRenderNodeFd();
+        if (fd < 0) throw new IllegalStateException("DRI3: gagal buka device fd");
+        return fd;
+    }
 
     public void createPixmapFromFd(XServer xServer, int pixmapId, int fd, int width, int height,
                                     int stride, int depth, int bpp) {
-        int drmFormat = (depth == 32) ? 1 /*ARGB8888*/ : 4 /*RGB565*/; // sudah tidak dipakai native, dibiarkan utk kompatibilitas signature
+        int drmFormat = (depth == 32) ? 1 /*ARGB8888*/ : 4 /*RGB565*/;
         long imported = importDmaBufFd(fd, width, height, stride, drmFormat);
         if (imported == 0) {
-            // import gagal (AHardwareBuffer_recvHandleFromUnixSocket gagal, atau
-            // eglCreateImageKHR gagal) - jangan daftarkan pixmap rusak
             return;
         }
         // TODO: root Window dan Visual HARUS diambil dari window yg valid
         // (constraint object-identity Visual - lihat catatan Present sebelumnya),
-        // BUKAN null. Masih placeholder - lihat catatan lengkap di revisi
-        // sebelumnya, belum berubah statusnya.
+        // BUKAN null. Masih placeholder.
         com.eltechs.axs.requestHandlers.dri3.Dri3ImportedDrawable drawable =
                 new com.eltechs.axs.requestHandlers.dri3.Dri3ImportedDrawable(
                         pixmapId, xServer.getWindowsManager().getRootWindow(),
@@ -56,6 +50,6 @@ public final class Dri3BufferAllocator {
     }
 
     public BufferInfo exportPixmapAsFd(int pixmapId) {
-        return null; // stub - belum diimplementasikan (jalur guest<-host, kasus lebih jarang)
+        return null; // stub - belum diimplementasikan
     }
 }

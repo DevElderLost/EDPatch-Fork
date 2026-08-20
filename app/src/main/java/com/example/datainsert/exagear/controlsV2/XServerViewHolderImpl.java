@@ -36,6 +36,10 @@ public class XServerViewHolderImpl implements XServerViewHolder {
         scaleStyle = view.getConfiguration().getFitStyleHorizontal() == STRETCH ? SCALE_FULL_IGNORE_RATIO : SCALE_FULL_WITH_RATIO;
         mOriZoomController = view.getZoomController();
         mZoomController = new XZoomHandlerImpl(this);
+        // xserver session (game) mulai -> nyalakan server virtual gamepad (port 7946/7947).
+        // start() idempotent; dipanggil ulang tiap rotasi layar (lihat CustomInterfaceOverlay.attach()) tidak masalah.
+        // Pasangannya: CustomInterfaceOverlay.detach() -> GamepadServer.getInstance().stop()
+        com.example.datainsert.exagear.controlsV2.gamepad.GamepadServer.getInstance().start();
     }
 
 

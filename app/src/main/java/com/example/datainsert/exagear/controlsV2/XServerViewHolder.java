@@ -12,6 +12,8 @@ import android.util.Log;
 
 import com.eltechs.axs.geom.Point;
 import com.example.datainsert.exagear.controlsV2.axs.XKeyButton;
+import com.example.datainsert.exagear.controlsV2.gamepad.GamepadServer;
+import com.example.datainsert.exagear.controlsV2.gamepad.GamepadState;
 
 import java.util.List;
 
@@ -45,7 +47,9 @@ public interface XServerViewHolder {
      * pressKeyOrPointer 这几个改到接口作为default，因为这个pointer还是key的区分是我自己定义的，不属于通用规则，子类不应该管这些的实现
      */
     default void pressKeyOrPointer(int keycode) {
-        if ((keycode & XKeyButton.POINTER_MASK) == 0)
+        if (keycode >= XKeyButton.GAMEPAD_MASK) {
+            setGamepadInput(keycode - XKeyButton.GAMEPAD_MASK, true);
+        } else if ((keycode & XKeyButton.POINTER_MASK) == 0)
             injectKeyPress(keycode); //+8在impl里加吧
         else {
             int buttonCode = keycode - XKeyButton.POINTER_MASK;
@@ -59,7 +63,9 @@ public interface XServerViewHolder {
     }
 
     default void releaseKeyOrPointer(int keycode) {
-        if ((keycode & XKeyButton.POINTER_MASK) == 0)
+        if (keycode >= XKeyButton.GAMEPAD_MASK) {
+            setGamepadInput(keycode - XKeyButton.GAMEPAD_MASK, false);
+        } else if ((keycode & XKeyButton.POINTER_MASK) == 0)
             injectKeyRelease(keycode); //+8在impl里加吧
         else {
             int buttonCode = keycode - XKeyButton.POINTER_MASK;
@@ -70,6 +76,53 @@ public interface XServerViewHolder {
             else
                 Log.w("KEY", "releaseKeyOrPointer: 输入鼠标按键码无法识别："+buttonCode);
         }
+    }
+
+    /**
+     * Rute input tombol/arah-stick GAMEPAD_* (lihat {@link XKeyButton#GAMEPAD_MASK}) ke
+     * {@link GamepadServer} alih-alih ke X11 (jalur ini TIDAK lewat X server sama sekali,
+     * karena XInput/DirectInput di guest dibaca lewat socket UDP GamepadServer, bukan X11).
+     * @param gamepadCode nilai GAMEPAD_* di {@link XKeyButton} (setelah dikurangi GAMEPAD_MASK)
+     * @param down true = ditekan, false = dilepas
+     */
+    default void setGamepadInput(int gamepadCode, boolean down) {
+        GamepadState state = GamepadServer.getInstance().getState();
+        switch (gamepadCode) {
+            case XKeyButton.GAMEPAD_A: state.setPressed(GamepadState.IDX_BUTTON_A, down); break;
+            case XKeyButton.GAMEPAD_B: state.setPressed(GamepadState.IDX_BUTTON_B, down); break;
+            case XKeyButton.GAMEPAD_X: state.setPressed(GamepadState.IDX_BUTTON_X, down); break;
+            case XKeyButton.GAMEPAD_Y: state.setPressed(GamepadState.IDX_BUTTON_Y, down); break;
+            case XKeyButton.GAMEPAD_L1: state.setPressed(GamepadState.IDX_BUTTON_L1, down); break;
+            case XKeyButton.GAMEPAD_R1: state.setPressed(GamepadState.IDX_BUTTON_R1, down); break;
+            case XKeyButton.GAMEPAD_L3: state.setPressed(GamepadState.IDX_BUTTON_L3, down); break;
+            case XKeyButton.GAMEPAD_R3: state.setPressed(GamepadState.IDX_BUTTON_R3, down); break;
+            case XKeyButton.GAMEPAD_SELECT: state.setPressed(GamepadState.IDX_BUTTON_SELECT, down); break;
+            case XKeyButton.GAMEPAD_START: state.setPressed(GamepadState.IDX_BUTTON_START, down); break;
+            case XKeyButton.GAMEPAD_L2:
+                state.triggerL = down ? 1f : 0f;
+                state.setPressed(GamepadState.IDX_BUTTON_L2, down);
+                break;
+            case XKeyButton.GAMEPAD_R2:
+                state.triggerR = down ? 1f : 0f;
+                state.setPressed(GamepadState.IDX_BUTTON_R2, down);
+                break;
+            case XKeyButton.GAMEPAD_DPAD_UP: state.dpad[0] = down; break;
+            case XKeyButton.GAMEPAD_DPAD_RIGHT: state.dpad[1] = down; break;
+            case XKeyButton.GAMEPAD_DPAD_DOWN: state.dpad[2] = down; break;
+            case XKeyButton.GAMEPAD_DPAD_LEFT: state.dpad[3] = down; break;
+            case XKeyButton.GAMEPAD_LEFT_THUMB_UP: state.thumbLY = down ? 1f : 0f; break;
+            case XKeyButton.GAMEPAD_LEFT_THUMB_DOWN: state.thumbLY = down ? -1f : 0f; break;
+            case XKeyButton.GAMEPAD_LEFT_THUMB_RIGHT: state.thumbLX = down ? 1f : 0f; break;
+            case XKeyButton.GAMEPAD_LEFT_THUMB_LEFT: state.thumbLX = down ? -1f : 0f; break;
+            case XKeyButton.GAMEPAD_RIGHT_THUMB_UP: state.thumbRY = down ? 1f : 0f; break;
+            case XKeyButton.GAMEPAD_RIGHT_THUMB_DOWN: state.thumbRY = down ? -1f : 0f; break;
+            case XKeyButton.GAMEPAD_RIGHT_THUMB_RIGHT: state.thumbRX = down ? 1f : 0f; break;
+            case XKeyButton.GAMEPAD_RIGHT_THUMB_LEFT: state.thumbRX = down ? -1f : 0f; break;
+            default:
+                Log.w("KEY", "setGamepadInput: kode gamepad tidak dikenal: " + gamepadCode);
+                return;
+        }
+        GamepadServer.getInstance().pushStateToClients();
     }
 
     default void pressKeyOrPointer(List<Integer> keycodes) {

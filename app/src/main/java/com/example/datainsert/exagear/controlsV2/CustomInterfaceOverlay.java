@@ -116,6 +116,8 @@ public class CustomInterfaceOverlay implements XServerDisplayActivityInterfaceOv
         //这里不清除fragment了，让系统自动处理（而且如果要导入导出配置的话，这里清除就没法回调了）
 //        Const.clearFragment();
         Const.clear();
+        // attach()里start()是幂等的（内部判断running），旋转屏幕时这里stop()->随后attach()重新start()没问题
+        com.example.datainsert.exagear.controlsV2.gamepad.GamepadServer.getInstance().stop();
     }
 
 //    @Override // com.eltechs.axs.activities.XServerDisplayActivityUiOverlaySidePanels

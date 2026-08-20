@@ -176,6 +176,44 @@ public KeyOnBoardView(@NonNull Context c) {
             }
     ),QH.LPLinear.one(-2,-2).top(-dp8*6).to());
 
+    // ================= BARIS 7: GAMEPAD (tombol) =================
+    linearKeyboardRoot.addView(getKeyButtonsOneLine(
+            new XKeyButton.Info[]{
+                    gamepad_a,gamepad_b,gamepad_x,gamepad_y,
+                    gamepad_l1,gamepad_r1,gamepad_l2,gamepad_r2,
+                    gamepad_l3,gamepad_r3,gamepad_select,gamepad_start
+            },
+            new int[]{
+                    w,w,w,w,
+                    w,w,w,w,
+                    w,w,w,w
+            },
+            new int[]{
+                    0,0,0,dp8*3,
+                    0,0,0,dp8*3,
+                    0,0,0,0
+            }
+    ),QH.LPLinear.one(-2,-2).top(dp8*4).to());
+
+    // ================= BARIS 8: GAMEPAD (D-Pad + stick kiri/kanan) =================
+    linearKeyboardRoot.addView(getKeyButtonsOneLine(
+            new XKeyButton.Info[]{
+                    gamepad_dpad_up,gamepad_dpad_right,gamepad_dpad_down,gamepad_dpad_left,
+                    gamepad_left_thumb_up,gamepad_left_thumb_right,gamepad_left_thumb_down,gamepad_left_thumb_left,
+                    gamepad_right_thumb_up,gamepad_right_thumb_right,gamepad_right_thumb_down,gamepad_right_thumb_left
+            },
+            new int[]{
+                    w,w,w,w,
+                    w,w,w,w,
+                    w,w,w,w
+            },
+            new int[]{
+                    0,0,0,dp8*3,
+                    0,0,0,dp8*3,
+                    0,0,0,0
+            }
+    ),QH.LPLinear.one(-2,-2).top(dp8*2).to());
+
     horizontalScrollView.addView(
             linearKeyboardRoot,
             QH.LPLinear.one(-2,-2).top().bottom().to()

@@ -8,15 +8,14 @@ import com.eltechs.axs.xconnectors.XRequest;
 import com.eltechs.axs.xconnectors.XResponse;
 
 /**
- * REVISI KE-5 - handleOpen() DITULIS ULANG mengikuti Winlator persis
- * (dikonfirmasi baca app/src/main/java/.../DRI3Extension.java Winlator-Ludashi-test):
- * DRI3Open TIDAK PERNAH kirim fd device - cuma reply sukses kosong. Buffer
- * sharing sepenuhnya lewat AHardwareBuffer di PixmapFromBuffer (lihat
- * Dri3BufferAllocator.importDmaBufFd yg sudah ditulis ulang total jadi
- * AHardwareBuffer_recvHandleFromUnixSocket, BUKAN dma-buf lagi).
- *
- * openRenderNodeFd() DIHAPUS TOTAL dari sini (dan dari Dri3BufferAllocator.java)
- * - sudah tidak relevan, /dev/dri tidak pernah dibutuhkan lagi dgn pendekatan ini.
+ * REVISI KE-6 - REVERT ke dma-buf (dari REVISI KE-5 yang sempat pakai
+ * pendekatan Winlator/AHardwareBuffer). Alasan revert: paket Turnip-Zink
+ * Anda dikonfirmasi Mesa VANILLA (bukan fork Winlator), dan arsitektur UBT
+ * ExaGear tidak punya mekanisme wrapping/thunking native library spt Box64,
+ * jadi AHardwareBuffer (fungsi Bionic) tidak pernah bisa dipanggil dari
+ * Turnip x86 murni yang jalan di guest. handleOpen() KEMBALI kirim fd asli
+ * via SCM_RIGHTS (sendReplyWithFd) - Mesa vanilla expect xcb_dri3_open_reply_fds()
+ * dpt hasil beneran (dikonfirmasi baca strings libvulkan_freedreno.so Anda).
  */
 public final class DRI3Requests extends HandlerObjectBase {
 
@@ -43,15 +42,15 @@ public final class DRI3Requests extends HandlerObjectBase {
 
     private void handleOpen(XClient client, int seq, byte minorOpcode,
                              XRequest request, XResponse response) throws java.io.IOException {
-        request.readInt(); // drawable (diabaikan, sama spt Winlator - cuma dibaca lalu tidak dipakai)
-        request.readInt(); // provider (diabaikan)
+        int drawable = request.readInt();
+        request.readInt(); // provider (diabaikan - Android single-GPU)
 
-        // TIDAK ADA fd dikirim sama sekali - persis DRI3Extension.java Winlator.
-        // sendReplyWithFd/writeWithFd TIDAK DIPAKAI LAGI di sini - kembali ke
-        // reply biasa (sendSuccessReply dgn nol field tambahan = 32-byte
-        // reply kosong, sesuai spec: DRI3Open reply memang tidak wajib fd
-        // kalau server tidak menyediakan device node asli).
-        response.sendSuccessReply((byte) 1);
+        int deviceFd = bufferAllocator.openRenderNodeFd();
+        if (deviceFd < 0) {
+            response.sendError(new com.eltechs.axs.proto.input.errors.BadAlloc(drawable));
+            return;
+        }
+        response.sendReplyWithFd((byte) 1, seq, deviceFd, null);
     }
 
     private void handlePixmapFromBuffer(XClient client, int seq, byte minorOpcode,
@@ -65,10 +64,6 @@ public final class DRI3Requests extends HandlerObjectBase {
         int depth = request.readByte() & 0xFF;
         int bpp = request.readByte() & 0xFF;
 
-        // fd ini SEKARANG socketpair fd (protokol Winlator), BUKAN dma-buf -
-        // lihat Dri3BufferAllocator.importDmaBufFd yg sudah ditulis ulang.
-        // Mekanisme AMBIL fd dari SCM_RIGHTS-nya SENDIRI (dequeueReceivedFd)
-        // TIDAK BERUBAH - itu independen dari apa ISI/MAKNA fd-nya.
         int bufferFd = request.dequeueReceivedFd();
         if (bufferFd < 0) {
             response.sendError(new com.eltechs.axs.proto.input.errors.BadAlloc(newPixmapId));
