@@ -43,9 +43,16 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
     private LinearLayout iconContainer;
     private Context context = Globals.getAppContext();
 
-    // Pilihan tipe joystick icon
-    private String selectedType = "outer"; // default
+    // Pilihan tipe joystick icon — STATIC supaya TIDAK reset ke default kalau panel/dialog
+    // edit ini di-recreate (createMainEditView dipanggil ulang) di antara saat user pilih
+    // tipe di popup menu dan saat user tap icon-nya. Sebelumnya field instance biasa bikin
+    // pilihan "Inner"/"Mousepad" hilang & balik ke "outer" tanpa disadari -> badge pindah
+    // ke icon lain / ketimpa terus di tipe yang sama.
+    private static String selectedType = "outer"; // default
     private final String[] TYPES = {"outer", "inner", "mousepad"};
+
+    // Label teks yang menampilkan tipe yang sedang aktif, di-update tiap kali selectedType berubah
+    private TextView typeLabel;
 
     // Simpan referensi badge per file, supaya bisa direfresh semua tanpa reload ulang daftar icon
     private final Map<File, TextView> badgeByFile = new HashMap<>();
@@ -86,7 +93,20 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
 
         scrollView.addView(iconContainer);
 
-        // ── Area kanan: tombol popup menu ───────────────────────────────
+        // ── Area kanan: label tipe aktif + tombol popup menu ───────────────────────────
+        typeLabel = new TextView(c);
+        typeLabel.setTextColor(0xffffffff);
+        typeLabel.setTextSize(11);
+        typeLabel.setPadding(8, 0, 4, 0);
+        typeLabel.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        );
+        labelParams.gravity = Gravity.CENTER_VERTICAL;
+        typeLabel.setLayoutParams(labelParams);
+        updateTypeLabel();
+
         ImageView menuButton = new ImageView(c);
         menuButton.setImageResource(2131230877);
         LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(
@@ -100,11 +120,12 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
 
         menuButton.setOnClickListener(v -> showTypePopupMenu(v));
 
-        // Gabungkan scroll + tombol menu
+        // Gabungkan scroll + label tipe + tombol menu
         LinearLayout horizontalContainer = new LinearLayout(c);
         horizontalContainer.setOrientation(LinearLayout.HORIZONTAL);
         horizontalContainer.addView(scrollView, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        horizontalContainer.addView(typeLabel);
         horizontalContainer.addView(menuButton);
 
         root.addView(horizontalContainer);
@@ -132,10 +153,23 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
                 selectedType = "mousepad";
                 showToast("Dipilih: Mousepad");
             }
+            updateTypeLabel();
             return true;
         });
 
         popup.show();
+    }
+
+    /** Update teks label yang menampilkan tipe icon yang lagi aktif dipilih. */
+    private void updateTypeLabel() {
+        if (typeLabel == null) return;
+        String text;
+        switch (selectedType) {
+            case "inner": text = "Inner (2)"; break;
+            case "mousepad": text = "Mousepad (M)"; break;
+            default: text = "Outer (1)"; break;
+        }
+        typeLabel.setText(text);
     }
 
     private void loadIconsAsync() {

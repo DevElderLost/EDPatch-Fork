@@ -42,12 +42,17 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
     private LinearLayout iconContainer;
     private Context context = Globals.getAppContext();
 
-    // Pilihan tipe utama
-    private String selectedStyle = "cross"; // default
+    // Pilihan tipe utama — STATIC dgn alasan sama seperti Prop1IconJoystick: supaya tidak
+    // reset ke default "cross" kalau panel edit ini di-recreate di antara user pilih style
+    // di popup dan tap icon-nya.
+    private static String selectedStyle = "cross"; // default
     private final String[] STYLES = {"cross", "neutral", "arrow_pressed"};
 
-    // Untuk arrow_pressed → sub selection
-    private String selectedArrowDirection = "up"; // default ketika memilih arrow_pressed
+    // Untuk arrow_pressed → sub selection — juga STATIC dgn alasan sama
+    private static String selectedArrowDirection = "up"; // default ketika memilih arrow_pressed
+
+    // Label teks yang menampilkan style+arah yang sedang aktif
+    private TextView styleLabel;
 
     // Simpan referensi badge per file, supaya bisa direfresh semua tanpa reload ulang daftar icon
     private final Map<File, TextView> badgeByFile = new HashMap<>();
@@ -88,7 +93,20 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
 
         scrollView.addView(iconContainer);
 
-        // ── Tombol popup menu di kanan ───────────────────────────────
+        // ── Label style aktif + tombol popup menu di kanan ───────────────────────────
+        styleLabel = new TextView(c);
+        styleLabel.setTextColor(0xffffffff);
+        styleLabel.setTextSize(11);
+        styleLabel.setPadding(8, 0, 4, 0);
+        styleLabel.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams styleLabelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        );
+        styleLabelParams.gravity = Gravity.CENTER_VERTICAL;
+        styleLabel.setLayoutParams(styleLabelParams);
+        updateStyleLabel();
+
         ImageView menuButton = new ImageView(c);
         menuButton.setImageResource(2131230877);
         LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(
@@ -102,11 +120,12 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
 
         menuButton.setOnClickListener(v -> showMainStylePopupMenu(v));
 
-        // Gabungkan scroll + menu button
+        // Gabungkan scroll + label + menu button
         LinearLayout horizontalContainer = new LinearLayout(c);
         horizontalContainer.setOrientation(LinearLayout.HORIZONTAL);
         horizontalContainer.addView(scrollView, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        horizontalContainer.addView(styleLabel);
         horizontalContainer.addView(menuButton);
 
         root.addView(horizontalContainer);
@@ -127,9 +146,11 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
             if (id == 1) {
                 selectedStyle = "cross";
                 showToast("Dipilih: Cross style");
+                updateStyleLabel();
             } else if (id == 2) {
                 selectedStyle = "neutral";
                 showToast("Dipilih: Neutral style");
+                updateStyleLabel();
             } else if (id == 3) {
                 selectedStyle = "arrow_pressed";
                 showArrowDirectionSubMenu(anchor);
@@ -157,10 +178,33 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
             else if (subId == 4) selectedArrowDirection = "right";
 
             showToast("Arrow pressed: " + selectedArrowDirection + " dipilih");
+            updateStyleLabel();
             return true;
         });
 
         subPopup.show();
+    }
+
+    /** Update teks label yang menampilkan style+arah D-Pad yang lagi aktif dipilih. */
+    private void updateStyleLabel() {
+        if (styleLabel == null) return;
+        String text;
+        switch (selectedStyle) {
+            case "neutral": text = "Neutral"; break;
+            case "arrow_pressed":
+                String dirNum;
+                switch (selectedArrowDirection) {
+                    case "up": dirNum = "1↑"; break;
+                    case "down": dirNum = "2↓"; break;
+                    case "right": dirNum = "3→"; break;
+                    case "left": dirNum = "4←"; break;
+                    default: dirNum = selectedArrowDirection; break;
+                }
+                text = "Arrow (" + dirNum + ")";
+                break;
+            default: text = "Cross (0)"; break;
+        }
+        styleLabel.setText(text);
     }
 
     private void loadIconsAsync() {
