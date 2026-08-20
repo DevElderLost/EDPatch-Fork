@@ -15,15 +15,11 @@ import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import android.support.annotation.Nullable;
-
 import com.eltechs.axs.Globals;
 import com.example.datainsert.exagear.QH;
-import com.example.datainsert.exagear.controlsV2.Const;
 import com.example.datainsert.exagear.controlsV2.model.ModelProvider;
 import com.example.datainsert.exagear.controlsV2.model.OneStick;
 import com.example.datainsert.exagear.controlsV2.TouchAreaModel;
@@ -36,25 +32,33 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.eltechs.ed.R;
 
+/**
+ * Picker icon Joystick — meniru pola slot milik Winlator (ControlsEditorActivity.loadSlotIconsUI):
+ * TIDAK ada "pilih tipe dulu di popup lalu tap icon" (itu sumber bug lama: gampang ke-desync
+ * antara popup & tap). Sebagai gantinya, tiap slot py nama file TETAP (bukan berbasis nama file
+ * sumber), dan klik icon langsung mengisi slot kosong berikutnya secara berurutan:
+ * <br/> - klik icon yang BELUM dipakai -> masuk slot kosong pertama (1=outer, 2=inner, M=mousepad)
+ * <br/> - klik icon yang SUDAH dipakai -> dilepas dari slotnya (badge hilang)
+ * <br/> Badge dihitung LANGSUNG dari array slot ini saat ini, tidak ada variable "mode aktif"
+ * terpisah yang bisa lupa/ketuker.
+ */
 public class Prop1IconJoystick extends Prop<TouchAreaModel> {
 
     private LinearLayout iconContainer;
     private Context context = Globals.getAppContext();
 
-    // Pilihan tipe joystick icon — STATIC supaya TIDAK reset ke default kalau panel/dialog
-    // edit ini di-recreate (createMainEditView dipanggil ulang) di antara saat user pilih
-    // tipe di popup menu dan saat user tap icon-nya. Sebelumnya field instance biasa bikin
-    // pilihan "Inner"/"Mousepad" hilang & balik ke "outer" tanpa disadari -> badge pindah
-    // ke icon lain / ketimpa terus di tipe yang sama.
-    private static String selectedType = "outer"; // default
-    private final String[] TYPES = {"outer", "inner", "mousepad"};
+    // Nama file TETAP per slot (bukan berbasis nama file sumber) — index tetap = slot tetap,
+    // menghilangkan kelas bug "nama file sumber ketimpa/ketuker" yang lama.
+    private static final String[] SLOT_FILE_NAMES = {"icon_outer.png", "icon_inner.png", "icon_mousepad.png"};
+    private static final String[] SLOT_BADGES = {"1", "2", "M"};
+    private static final int SLOT_COUNT = SLOT_FILE_NAMES.length;
 
-    // Label teks yang menampilkan tipe yang sedang aktif, di-update tiap kali selectedType berubah
-    private TextView typeLabel;
+    // File sumber (dari folder tmp/icon/stick) yang lagi menempati tiap slot, null = kosong.
+    // Diisi ulang tiap loadIconsAsync() dari file yang ada di folder target profile.
+    private final File[] slotSourceFiles = new File[SLOT_COUNT];
 
-    // Simpan referensi badge per file, supaya bisa direfresh semua tanpa reload ulang daftar icon
+    // Referensi badge per file sumber, supaya bisa direfresh semua tanpa reload ulang daftar icon
     private final Map<File, TextView> badgeByFile = new HashMap<>();
 
     public Prop1IconJoystick(Host<TouchAreaModel> host, Context c) {
@@ -75,7 +79,13 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
-        // ── Horizontal Scroll untuk icon ───────────────────────────────
+        TextView hint = new TextView(c);
+        hint.setText("Slot: 1=Outer  2=Inner  M=Mousepad. Tap icon = isi slot kosong berikutnya. Tap lagi = lepas.");
+        hint.setTextSize(11);
+        hint.setTextColor(0xffbbbbbb);
+        hint.setPadding(4, 2, 4, 4);
+        root.addView(hint);
+
         HorizontalScrollView scrollView = new HorizontalScrollView(c);
         scrollView.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -92,84 +102,11 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
         iconContainer.setBackgroundColor(0xff2a2a2a);
 
         scrollView.addView(iconContainer);
-
-        // ── Area kanan: label tipe aktif + tombol popup menu ───────────────────────────
-        typeLabel = new TextView(c);
-        typeLabel.setTextColor(0xffffffff);
-        typeLabel.setTextSize(11);
-        typeLabel.setPadding(8, 0, 4, 0);
-        typeLabel.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        );
-        labelParams.gravity = Gravity.CENTER_VERTICAL;
-        typeLabel.setLayoutParams(labelParams);
-        updateTypeLabel();
-
-        ImageView menuButton = new ImageView(c);
-        menuButton.setImageResource(2131230877);
-        LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        );
-        menuParams.gravity = Gravity.CENTER_VERTICAL;
-        menuButton.setLayoutParams(menuParams);
-        menuButton.setPadding(16, 0, 16, 0);
-        menuButton.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-
-        menuButton.setOnClickListener(v -> showTypePopupMenu(v));
-
-        // Gabungkan scroll + label tipe + tombol menu
-        LinearLayout horizontalContainer = new LinearLayout(c);
-        horizontalContainer.setOrientation(LinearLayout.HORIZONTAL);
-        horizontalContainer.addView(scrollView, new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        horizontalContainer.addView(typeLabel);
-        horizontalContainer.addView(menuButton);
-
-        root.addView(horizontalContainer);
+        root.addView(scrollView);
 
         loadIconsAsync();
 
         return root;
-    }
-
-    private void showTypePopupMenu(View anchor) {
-        PopupMenu popup = new PopupMenu(context, anchor);
-        popup.getMenu().add(0, 1, 0, "Outer");
-        popup.getMenu().add(0, 2, 0, "Inner");
-        popup.getMenu().add(0, 3, 0, "Mousepad");
-
-        popup.setOnMenuItemClickListener(item -> {
-            int id = item.getItemId();
-            if (id == 1) {
-                selectedType = "outer";
-                showToast("Dipilih: Outer");
-            } else if (id == 2) {
-                selectedType = "inner";
-                showToast("Dipilih: Inner");
-            } else if (id == 3) {
-                selectedType = "mousepad";
-                showToast("Dipilih: Mousepad");
-            }
-            updateTypeLabel();
-            return true;
-        });
-
-        popup.show();
-    }
-
-    /** Update teks label yang menampilkan tipe icon yang lagi aktif dipilih. */
-    private void updateTypeLabel() {
-        if (typeLabel == null) return;
-        String text;
-        switch (selectedType) {
-            case "inner": text = "Inner (2)"; break;
-            case "mousepad": text = "Mousepad (M)"; break;
-            default: text = "Outer (1)"; break;
-        }
-        typeLabel.setText(text);
     }
 
     private void loadIconsAsync() {
@@ -196,6 +133,7 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
             new Handler(Looper.getMainLooper()).post(() -> {
                 iconContainer.removeAllViews();
                 badgeByFile.clear();
+                initSlotAssignments(iconFiles);
                 for (File iconFile : iconFiles) {
                     addIconThumbnail(iconFile);
                 }
@@ -204,13 +142,49 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
     }
 
     /**
-     * Bikin thumbnail icon dibungkus FrameLayout + badge angka kecil di pojok kanan-atas
-     * yang menandakan icon ini sedang dipakai sebagai apa untuk profile aktif:
-     * "1" = outer, "2" = inner, "M" = mousepad (bisa gabungan mis. "1,2" kalau file sumber
-     * yang sama kebetulan dipakai untuk keduanya). Badge disembunyikan kalau icon ini
-     * belum dipakai sama sekali. Ini supaya kalau icon-nya banyak, user tidak bingung/
-     * kepencet 2x tanpa sadar sudah pilih yang mana untuk outer vs inner.
+     * Isi slotSourceFiles[] dari kondisi file yang SUDAH ada di folder target profile saat ini,
+     * dengan mencocokkan isi bita file target (icon_outer.png dst) ke salah satu file sumber
+     * di tmp/icon/stick yang isinya SAMA PERSIS (byte-for-byte). Ini supaya badge langsung
+     * kelihatan benar kalau sebelumnya sudah pernah disimpan.
      */
+    private void initSlotAssignments(List<File> sourceFiles) {
+        for (int s = 0; s < SLOT_COUNT; s++) slotSourceFiles[s] = null;
+
+        String currentProfileName = ModelProvider.getCurrentProfileCanonicalName();
+        if (currentProfileName == null || currentProfileName.trim().isEmpty()) return;
+        File targetDir = getProfileJoystickIconDir(currentProfileName);
+        if (targetDir == null) return;
+
+        for (int s = 0; s < SLOT_COUNT; s++) {
+            File slotFile = new File(targetDir, SLOT_FILE_NAMES[s]);
+            if (!slotFile.isFile()) continue;
+            for (File src : sourceFiles) {
+                if (filesEqual(src, slotFile)) {
+                    slotSourceFiles[s] = src;
+                    break;
+                }
+            }
+        }
+    }
+
+    private boolean filesEqual(File a, File b) {
+        if (a.length() != b.length()) return false;
+        try (FileInputStream ia = new FileInputStream(a); FileInputStream ib = new FileInputStream(b)) {
+            byte[] bufA = new byte[8192];
+            byte[] bufB = new byte[8192];
+            int rA, rB;
+            while (true) {
+                rA = ia.read(bufA);
+                rB = ib.read(bufB);
+                if (rA != rB) return false;
+                if (rA == -1) return true;
+                for (int i = 0; i < rA; i++) if (bufA[i] != bufB[i]) return false;
+            }
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private void addIconThumbnail(File iconFile) {
         try {
             Bitmap original = BitmapFactory.decodeFile(iconFile.getAbsolutePath());
@@ -230,17 +204,8 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             iv.setImageBitmap(thumb);
             iv.setBackground(null);
-
             iv.setClickable(true);
             iv.setFocusable(true);
-
-            iv.setOnClickListener(v -> {
-                v.animate().alpha(0.6f).setDuration(80).withEndAction(() -> {
-                    v.animate().alpha(1f).setDuration(120).start();
-                    handleIconSelected(iconFile);
-                    refreshAllBadges(); // status berubah utk file ini (dan mungkin file lain yg ketiban timpa)
-                }).start();
-            });
 
             wrapper.addView(iv);
 
@@ -256,143 +221,106 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
             badge.setMinWidth(0);
             badge.setGravity(Gravity.CENTER);
             GradientDrawable badgeBg = new GradientDrawable();
-            badgeBg.setColor(0xE6E53935); // merah semi-transparan, kontras di atas thumbnail apapun
+            badgeBg.setColor(0xE6E53935);
             badgeBg.setCornerRadius(20f);
             badge.setBackground(badgeBg);
             wrapper.addView(badge);
 
             badgeByFile.put(iconFile, badge);
-            updateBadge(iconFile);
+
+            iv.setOnClickListener(v -> {
+                v.animate().alpha(0.6f).setDuration(80).withEndAction(() -> {
+                    v.animate().alpha(1f).setDuration(120).start();
+                    onIconTapped(iconFile);
+                }).start();
+            });
 
             iconContainer.addView(wrapper);
+            updateBadge(iconFile);
 
         } catch (Exception e) {
             // Lewati file error
         }
     }
 
-    /** Refresh badge SEMUA thumbnail yang lagi tampil (dipanggil tiap habis simpan). */
-    private void refreshAllBadges() {
-        for (File f : badgeByFile.keySet()) {
-            updateBadge(f);
-        }
-    }
-
-    /** Update 1 badge sesuai status assignment file sumber ini utk profile aktif saat ini. */
-    private void updateBadge(File sourceIconFile) {
-        TextView badge = badgeByFile.get(sourceIconFile);
-        if (badge == null) return;
-        String label = getAssignedLabel(sourceIconFile);
-        if (label == null) {
-            badge.setVisibility(View.GONE);
-        } else {
-            badge.setVisibility(View.VISIBLE);
-            badge.setText(label);
-        }
-    }
-
     /**
-     * @return "1" kalau file sumber ini lagi jadi outer, "2" kalau inner, "M" kalau mousepad
-     * profile aktif (bisa gabungan dgn koma kalau lebih dari satu), atau null kalau belum
-     * dipakai sama sekali.
+     * Logika inti — persis pola Winlator: cari apakah file ini sudah menempati salah satu slot;
+     * kalau ya, lepas (geser slot sesudahnya maju). Kalau belum, taruh di slot kosong pertama;
+     * kalau semua slot penuh, geser semua maju dan taruh di slot terakhir.
      */
-    @Nullable
-    private String getAssignedLabel(File sourceIconFile) {
-        String currentProfileName = ModelProvider.getCurrentProfileCanonicalName();
-        if (currentProfileName == null || currentProfileName.trim().isEmpty()) return null;
-
-        File targetDir = getProfileJoystickIconDir(currentProfileName);
-        if (targetDir == null) return null;
-
-        String originalFileName = sourceIconFile.getName().toLowerCase();
-        if (!originalFileName.endsWith(".png")) return null;
-        String baseName = originalFileName.substring(0, originalFileName.length() - 4);
-        if (baseName.trim().isEmpty()) return null;
-
-        List<String> labels = new ArrayList<>();
-        if (new File(targetDir, baseName + "_outer.png").exists()) labels.add("1");
-        if (new File(targetDir, baseName + "_inner.png").exists()) labels.add("2");
-        if (new File(targetDir, baseName + "_mousepad.png").exists()) labels.add("M");
-        if (labels.isEmpty()) return null;
-        return android.text.TextUtils.join(",", labels);
-    }
-
-    private void handleIconSelected(File selectedFile) {
+    private void onIconTapped(File iconFile) {
         OneStick stick = getOneStick();
         if (stick == null) {
             showToast("Model bukan Joystick");
             return;
         }
 
-        String originalFileName = selectedFile.getName().toLowerCase();
-        if (!originalFileName.endsWith(".png")) {
-            showToast("File bukan PNG");
-            return;
+        int existingSlot = -1;
+        for (int s = 0; s < SLOT_COUNT; s++) {
+            if (iconFile.equals(slotSourceFiles[s])) { existingSlot = s; break; }
         }
 
-        // Ambil nama tanpa .png
-        String baseName = originalFileName.substring(0, originalFileName.length() - 4);
-        if (baseName.trim().isEmpty()) {
-            showToast("Nama file tidak valid");
-            return;
+        if (existingSlot >= 0) {
+            for (int s = existingSlot; s < SLOT_COUNT - 1; s++) slotSourceFiles[s] = slotSourceFiles[s + 1];
+            slotSourceFiles[SLOT_COUNT - 1] = null;
+        } else {
+            boolean placed = false;
+            for (int s = 0; s < SLOT_COUNT; s++) {
+                if (slotSourceFiles[s] == null) { slotSourceFiles[s] = iconFile; placed = true; break; }
+            }
+            if (!placed) {
+                System.arraycopy(slotSourceFiles, 1, slotSourceFiles, 0, SLOT_COUNT - 1);
+                slotSourceFiles[SLOT_COUNT - 1] = iconFile;
+            }
         }
 
-        // Ambil nama profile yang sedang aktif
+        persistSlotsToDisk();
+        refreshAllBadges();
+    }
+
+    /** Tulis ulang seluruh isi folder icon profile ini supaya PERSIS sesuai slotSourceFiles[] saat ini. */
+    private void persistSlotsToDisk() {
         String currentProfileName = ModelProvider.getCurrentProfileCanonicalName();
         if (currentProfileName == null || currentProfileName.trim().isEmpty()) {
             showToast("Tidak ada profile yang dipilih");
             return;
         }
-
         File targetDir = getProfileJoystickIconDir(currentProfileName);
         if (targetDir == null) {
             showToast("Gagal membuat folder icon joystick untuk profile");
             return;
         }
 
-        String savedFileName;
-        File targetFile;
-
-        if ("outer".equals(selectedType)) {
-            targetFile = new File(targetDir, baseName + "_outer.png");
-        } else if ("inner".equals(selectedType)) {
-            targetFile = new File(targetDir, baseName + "_inner.png");
-        } else if ("mousepad".equals(selectedType)) {
-            targetFile = new File(targetDir, baseName + "_mousepad.png");
-        } else {
-            showToast("Tipe tidak valid");
-            return;
-        }
-
-        savedFileName = targetFile.getName();
-
-        // Bersihkan file lama dengan suffix tipe yang sama (dari icon sumber LAIN) supaya
-        // cuma ada 1 file aktif per tipe (_outer/_inner/_mousepad) di folder profile ini.
-        // Kalau ini tidak dibersihkan: (a) badge di icon lama jadi nyangkut/salah,
-        // (b) loadPngFromIconDir bisa nemu >1 kandidat lagi kalau nanti ada perubahan baseName.
-        String suffixToClear = "_" + selectedType + ".png";
-        File[] existing = targetDir.listFiles((d, name) -> name.toLowerCase().endsWith(suffixToClear));
-        if (existing != null) {
-            for (File old : existing) {
-                if (!old.getName().equals(targetFile.getName())) {
-                    //noinspection ResultOfMethodCallIgnored
-                    old.delete();
-                }
+        for (int s = 0; s < SLOT_COUNT; s++) {
+            File targetFile = new File(targetDir, SLOT_FILE_NAMES[s]);
+            if (slotSourceFiles[s] == null) {
+                if (targetFile.exists()) //noinspection ResultOfMethodCallIgnored
+                    targetFile.delete();
+            } else {
+                if (targetFile.exists()) //noinspection ResultOfMethodCallIgnored
+                    targetFile.delete();
+                copyFile(slotSourceFiles[s], targetFile);
             }
         }
+        showToast("Icon tersimpan untuk profile \"" + currentProfileName + "\"");
+    }
 
-        // Hapus file lama jika sudah ada (overwrite)
-        if (targetFile.exists()) {
-            targetFile.delete();
+    private void refreshAllBadges() {
+        for (File f : badgeByFile.keySet()) updateBadge(f);
+    }
+
+    private void updateBadge(File sourceIconFile) {
+        TextView badge = badgeByFile.get(sourceIconFile);
+        if (badge == null) return;
+        int slot = -1;
+        for (int s = 0; s < SLOT_COUNT; s++) {
+            if (sourceIconFile.equals(slotSourceFiles[s])) { slot = s; break; }
         }
-
-        boolean success = copyFile(selectedFile, targetFile);
-
-        if (success) {
-            showToast("Icon disimpan ke profile \"" + currentProfileName + "\":\n" + savedFileName);
-            //notifyModelChanged();  // Uncomment jika ingin refresh preview joystick langsung
+        if (slot < 0) {
+            badge.setVisibility(View.GONE);
         } else {
-            showToast("Gagal menyalin icon");
+            badge.setVisibility(View.VISIBLE);
+            badge.setText(SLOT_BADGES[slot]);
         }
     }
 
@@ -431,9 +359,7 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
         return new File(patchDir, "controls/tmp/icon/stick");
     }
 
-    /**
-     * Folder tujuan icon Joystick sekarang mengikuti nama profile yang aktif
-     */
+    /** Folder tujuan icon Joystick mengikuti nama profile yang aktif */
     private File getProfileJoystickIconDir(String profileName) {
         File patchDir = QH.Files.edPatchDir();
         if (patchDir == null) return null;

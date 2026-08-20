@@ -92,9 +92,10 @@ public class TouchAreaDpad extends TouchAreaStick {
         //   CUSTOM dari folder edpatch/controls/[profile]/icon/dpad/ (prioritas tertinggi)
         // ─────────────────────────────────────────────
 
-        // Cross background / base — cari suffix "_cross_back" persis dulu (sesuai yg
-        // disimpan Prop1IconDpad), badge "0" di editor mengacu ke file ini.
-        Drawable customCrossBack = loadPngFromIconDir("_cross_back", false);
+        // Cross background / base — cari nama file tetap "icon_back" dulu (skema slot baru
+        // Prop1IconDpad, badge "0"), baru fallback ke nama lama/manual.
+        Drawable customCrossBack = loadPngFromIconDir("icon_back", false);
+        if (customCrossBack == null) customCrossBack = loadPngFromIconDir("_cross_back", false);
         if (customCrossBack == null) customCrossBack = loadPngFromIconDir("cross_back", false);
         if (customCrossBack != null) {
             mCrossBack = customCrossBack.mutate();
@@ -113,8 +114,9 @@ public class TouchAreaDpad extends TouchAreaStick {
             if (mCrossDrawable != null) mCrossDrawable = mCrossDrawable.mutate();
         }
 
-        // Neutral arrows (semua arah kelihatan samar) — cari suffix "_neutral" persis dulu
-        Drawable customNeutral = loadPngFromIconDir("_neutral", false);
+        // Neutral arrows (semua arah kelihatan samar) — nama file tetap "icon_neutral" dulu
+        Drawable customNeutral = loadPngFromIconDir("icon_neutral", false);
+        if (customNeutral == null) customNeutral = loadPngFromIconDir("_neutral", false);
         if (customNeutral == null) customNeutral = loadPngFromIconDir("neutral", false);
         if (customNeutral == null) customNeutral = loadPngFromIconDir("cross_neutral", false);
         if (customNeutral != null) {
@@ -125,27 +127,32 @@ public class TouchAreaDpad extends TouchAreaStick {
         }
 
         // ─────────────────────────────────────────────
-        //   Arrow PRESSED – cari file yang mengandung _PRESSED
+        //   Arrow PRESSED – nama file tetap "icon_arrow_x" dulu (skema slot baru), baru
+        //   fallback ke pencarian lama yang mengandung "_PRESSED"
         // ─────────────────────────────────────────────
-        mArrowUpPressed = loadPngFromIconDir("arrow_up", true);
+        mArrowUpPressed = loadPngFromIconDir("icon_arrow_up", false);
+        if (mArrowUpPressed == null) mArrowUpPressed = loadPngFromIconDir("arrow_up", true);
         if (mArrowUpPressed == null) {
             mArrowUpPressed = ResourcesCompat.getDrawable(res, 2131231078, null);
         }
         if (mArrowUpPressed != null) mArrowUpPressed = mArrowUpPressed.mutate();
 
-        mArrowDownPressed = loadPngFromIconDir("arrow_down", true);
+        mArrowDownPressed = loadPngFromIconDir("icon_arrow_down", false);
+        if (mArrowDownPressed == null) mArrowDownPressed = loadPngFromIconDir("arrow_down", true);
         if (mArrowDownPressed == null) {
             mArrowDownPressed = ResourcesCompat.getDrawable(res, 2131231075, null);
         }
         if (mArrowDownPressed != null) mArrowDownPressed = mArrowDownPressed.mutate();
 
-        mArrowLeftPressed = loadPngFromIconDir("arrow_left", true);
+        mArrowLeftPressed = loadPngFromIconDir("icon_arrow_left", false);
+        if (mArrowLeftPressed == null) mArrowLeftPressed = loadPngFromIconDir("arrow_left", true);
         if (mArrowLeftPressed == null) {
             mArrowLeftPressed = ResourcesCompat.getDrawable(res, 2131231076, null);
         }
         if (mArrowLeftPressed != null) mArrowLeftPressed = mArrowLeftPressed.mutate();
 
-        mArrowRightPressed = loadPngFromIconDir("arrow_right", true);
+        mArrowRightPressed = loadPngFromIconDir("icon_arrow_right", false);
+        if (mArrowRightPressed == null) mArrowRightPressed = loadPngFromIconDir("arrow_right", true);
         if (mArrowRightPressed == null) {
             mArrowRightPressed = ResourcesCompat.getDrawable(res, 2131231077, null);
         }

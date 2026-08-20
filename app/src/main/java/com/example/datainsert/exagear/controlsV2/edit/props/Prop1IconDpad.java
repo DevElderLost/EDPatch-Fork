@@ -9,18 +9,15 @@ import android.media.ThumbnailUtils;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import android.support.annotation.Nullable;
 
 import com.eltechs.axs.Globals;
 import com.example.datainsert.exagear.QH;
@@ -37,25 +34,31 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Picker icon D-Pad — pola sama dengan Prop1IconJoystick (meniru slot Winlator):
+ * tap icon = isi slot kosong berikutnya, tap lagi = lepas. Tidak ada popup "pilih tipe dulu".
+ * <br/> Slot: 0=Back/Cross, 1=Atas, 2=Bawah, 3=Kanan, 4=Kiri.
+ * <br/> "Neutral" (semua arah samar) dipisah jadi checkbox tersendiri karena bukan bagian
+ * dari 5 slot bernomor yang diminta, dan sifatnya cuma satu file on/off, bukan multi-slot.
+ */
 public class Prop1IconDpad extends Prop<TouchAreaModel> {
 
     private LinearLayout iconContainer;
     private Context context = Globals.getAppContext();
 
-    // Pilihan tipe utama — STATIC dgn alasan sama seperti Prop1IconJoystick: supaya tidak
-    // reset ke default "cross" kalau panel edit ini di-recreate di antara user pilih style
-    // di popup dan tap icon-nya.
-    private static String selectedStyle = "cross"; // default
-    private final String[] STYLES = {"cross", "neutral", "arrow_pressed"};
+    private static final String[] SLOT_FILE_NAMES = {
+            "icon_back.png", "icon_arrow_up.png", "icon_arrow_down.png", "icon_arrow_right.png", "icon_arrow_left.png"
+    };
+    private static final String[] SLOT_BADGES = {"0", "1", "2", "3", "4"};
+    private static final int SLOT_COUNT = SLOT_FILE_NAMES.length;
 
-    // Untuk arrow_pressed → sub selection — juga STATIC dgn alasan sama
-    private static String selectedArrowDirection = "up"; // default ketika memilih arrow_pressed
+    private static final String NEUTRAL_FILE_NAME = "icon_neutral.png";
 
-    // Label teks yang menampilkan style+arah yang sedang aktif
-    private TextView styleLabel;
+    private final File[] slotSourceFiles = new File[SLOT_COUNT];
+    private File neutralSourceFile = null; // file sumber yg lagi jadi neutral, null = tidak dipakai
 
-    // Simpan referensi badge per file, supaya bisa direfresh semua tanpa reload ulang daftar icon
     private final Map<File, TextView> badgeByFile = new HashMap<>();
+    private CheckBox cbNeutralMode; // dipakai utk memilih file sbg neutral lewat tap icon jg (lihat bawah)
 
     public Prop1IconDpad(Host<TouchAreaModel> host, Context c) {
         super(host, c);
@@ -75,7 +78,13 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
-        // ── Horizontal Scroll untuk icon ───────────────────────────────
+        TextView hint = new TextView(c);
+        hint.setText("Slot: 0=Back  1=Atas  2=Bawah  3=Kanan  4=Kiri. Tap icon = isi slot kosong berikutnya. Tap lagi = lepas.");
+        hint.setTextSize(11);
+        hint.setTextColor(0xffbbbbbb);
+        hint.setPadding(4, 2, 4, 4);
+        root.addView(hint);
+
         HorizontalScrollView scrollView = new HorizontalScrollView(c);
         scrollView.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -92,119 +101,19 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
         iconContainer.setBackgroundColor(0xff2a2a2a);
 
         scrollView.addView(iconContainer);
+        root.addView(scrollView);
 
-        // ── Label style aktif + tombol popup menu di kanan ───────────────────────────
-        styleLabel = new TextView(c);
-        styleLabel.setTextColor(0xffffffff);
-        styleLabel.setTextSize(11);
-        styleLabel.setPadding(8, 0, 4, 0);
-        styleLabel.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams styleLabelParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        );
-        styleLabelParams.gravity = Gravity.CENTER_VERTICAL;
-        styleLabel.setLayoutParams(styleLabelParams);
-        updateStyleLabel();
-
-        ImageView menuButton = new ImageView(c);
-        menuButton.setImageResource(2131230877);
-        LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        );
-        menuParams.gravity = Gravity.CENTER_VERTICAL;
-        menuButton.setLayoutParams(menuParams);
-        menuButton.setPadding(16, 0, 16, 0);
-        menuButton.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-
-        menuButton.setOnClickListener(v -> showMainStylePopupMenu(v));
-
-        // Gabungkan scroll + label + menu button
-        LinearLayout horizontalContainer = new LinearLayout(c);
-        horizontalContainer.setOrientation(LinearLayout.HORIZONTAL);
-        horizontalContainer.addView(scrollView, new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        horizontalContainer.addView(styleLabel);
-        horizontalContainer.addView(menuButton);
-
-        root.addView(horizontalContainer);
+        // Mode "Neutral": kalau dicentang, tap icon berikutnya diarahkan ke slot neutral
+        // (bukan ke 5 slot bernomor), supaya tidak butuh popup terpisah.
+        cbNeutralMode = new CheckBox(c);
+        cbNeutralMode.setText("Mode pilih icon Neutral (semua arah samar) — centang lalu tap 1 icon");
+        cbNeutralMode.setTextColor(0xffbbbbbb);
+        cbNeutralMode.setTextSize(11);
+        root.addView(cbNeutralMode);
 
         loadIconsAsync();
 
         return root;
-    }
-
-    private void showMainStylePopupMenu(View anchor) {
-        PopupMenu popup = new PopupMenu(context, anchor);
-        popup.getMenu().add(0, 1, 0, "Cross (background & main)");
-        popup.getMenu().add(0, 2, 0, "Neutral (semua arah samar)");
-        popup.getMenu().add(0, 3, 0, "Arrow Pressed → pilih arah");
-
-        popup.setOnMenuItemClickListener(item -> {
-            int id = item.getItemId();
-            if (id == 1) {
-                selectedStyle = "cross";
-                showToast("Dipilih: Cross style");
-                updateStyleLabel();
-            } else if (id == 2) {
-                selectedStyle = "neutral";
-                showToast("Dipilih: Neutral style");
-                updateStyleLabel();
-            } else if (id == 3) {
-                selectedStyle = "arrow_pressed";
-                showArrowDirectionSubMenu(anchor);
-                return true; // biarkan sub-menu muncul
-            }
-            // updateThumbnailsIfNeeded(); // jika ingin refresh list icon saat ganti style
-            return true;
-        });
-
-        popup.show();
-    }
-
-    private void showArrowDirectionSubMenu(View anchor) {
-        PopupMenu subPopup = new PopupMenu(context, anchor);
-        subPopup.getMenu().add(0, 1, 0, "↑ Arrow Up (atas)");
-        subPopup.getMenu().add(0, 2, 0, "↓ Arrow Down (bawah)");
-        subPopup.getMenu().add(0, 3, 0, "← Arrow Left (kiri)");
-        subPopup.getMenu().add(0, 4, 0, "→ Arrow Right (kanan)");
-
-        subPopup.setOnMenuItemClickListener(subItem -> {
-            int subId = subItem.getItemId();
-            if (subId == 1) selectedArrowDirection = "up";
-            else if (subId == 2) selectedArrowDirection = "down";
-            else if (subId == 3) selectedArrowDirection = "left";
-            else if (subId == 4) selectedArrowDirection = "right";
-
-            showToast("Arrow pressed: " + selectedArrowDirection + " dipilih");
-            updateStyleLabel();
-            return true;
-        });
-
-        subPopup.show();
-    }
-
-    /** Update teks label yang menampilkan style+arah D-Pad yang lagi aktif dipilih. */
-    private void updateStyleLabel() {
-        if (styleLabel == null) return;
-        String text;
-        switch (selectedStyle) {
-            case "neutral": text = "Neutral"; break;
-            case "arrow_pressed":
-                String dirNum;
-                switch (selectedArrowDirection) {
-                    case "up": dirNum = "1↑"; break;
-                    case "down": dirNum = "2↓"; break;
-                    case "right": dirNum = "3→"; break;
-                    case "left": dirNum = "4←"; break;
-                    default: dirNum = selectedArrowDirection; break;
-                }
-                text = "Arrow (" + dirNum + ")";
-                break;
-            default: text = "Cross (0)"; break;
-        }
-        styleLabel.setText(text);
     }
 
     private void loadIconsAsync() {
@@ -231,6 +140,7 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
             new Handler(Looper.getMainLooper()).post(() -> {
                 iconContainer.removeAllViews();
                 badgeByFile.clear();
+                initSlotAssignments(iconFiles);
                 for (File iconFile : iconFiles) {
                     addIconThumbnail(iconFile);
                 }
@@ -238,12 +148,49 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
         }).start();
     }
 
-    /**
-     * Thumbnail icon dibungkus FrameLayout + badge angka kecil di pojok kanan-atas yang
-     * menandakan icon ini sedang dipakai sebagai apa untuk profile aktif:
-     * "0" = base/back (cross), "1" = arah atas, "2" = arah bawah, "3" = arah kanan,
-     * "4" = arah kiri. Badge disembunyikan kalau icon ini belum dipakai sama sekali.
-     */
+    private void initSlotAssignments(List<File> sourceFiles) {
+        for (int s = 0; s < SLOT_COUNT; s++) slotSourceFiles[s] = null;
+        neutralSourceFile = null;
+
+        String currentProfileName = ModelProvider.getCurrentProfileCanonicalName();
+        if (currentProfileName == null || currentProfileName.trim().isEmpty()) return;
+        File targetDir = getProfileDpadIconDir(currentProfileName);
+        if (targetDir == null) return;
+
+        for (int s = 0; s < SLOT_COUNT; s++) {
+            File slotFile = new File(targetDir, SLOT_FILE_NAMES[s]);
+            if (!slotFile.isFile()) continue;
+            for (File src : sourceFiles) {
+                if (filesEqual(src, slotFile)) { slotSourceFiles[s] = src; break; }
+            }
+        }
+
+        File neutralFile = new File(targetDir, NEUTRAL_FILE_NAME);
+        if (neutralFile.isFile()) {
+            for (File src : sourceFiles) {
+                if (filesEqual(src, neutralFile)) { neutralSourceFile = src; break; }
+            }
+        }
+    }
+
+    private boolean filesEqual(File a, File b) {
+        if (a.length() != b.length()) return false;
+        try (FileInputStream ia = new FileInputStream(a); FileInputStream ib = new FileInputStream(b)) {
+            byte[] bufA = new byte[8192];
+            byte[] bufB = new byte[8192];
+            int rA, rB;
+            while (true) {
+                rA = ia.read(bufA);
+                rB = ib.read(bufB);
+                if (rA != rB) return false;
+                if (rA == -1) return true;
+                for (int i = 0; i < rA; i++) if (bufA[i] != bufB[i]) return false;
+            }
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private void addIconThumbnail(File iconFile) {
         try {
             Bitmap original = BitmapFactory.decodeFile(iconFile.getAbsolutePath());
@@ -263,17 +210,8 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             iv.setImageBitmap(thumb);
             iv.setBackground(null);
-
             iv.setClickable(true);
             iv.setFocusable(true);
-
-            iv.setOnClickListener(v -> {
-                v.animate().alpha(0.6f).setDuration(80).withEndAction(() -> {
-                    v.animate().alpha(1f).setDuration(120).start();
-                    handleIconSelected(iconFile);
-                    refreshAllBadges();
-                }).start();
-            });
 
             wrapper.addView(iv);
 
@@ -289,152 +227,127 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
             badge.setMinWidth(0);
             badge.setGravity(Gravity.CENTER);
             GradientDrawable badgeBg = new GradientDrawable();
-            badgeBg.setColor(0xE61976D2); // biru semi-transparan (beda warna dari badge joystick biar gampang dibedakan sekilas)
+            badgeBg.setColor(0xE61976D2);
             badgeBg.setCornerRadius(20f);
             badge.setBackground(badgeBg);
             wrapper.addView(badge);
 
             badgeByFile.put(iconFile, badge);
-            updateBadge(iconFile);
+
+            iv.setOnClickListener(v -> {
+                v.animate().alpha(0.6f).setDuration(80).withEndAction(() -> {
+                    v.animate().alpha(1f).setDuration(120).start();
+                    onIconTapped(iconFile);
+                }).start();
+            });
 
             iconContainer.addView(wrapper);
+            updateBadge(iconFile);
 
         } catch (Exception e) {
             // Lewati file error
         }
     }
 
-    private void refreshAllBadges() {
-        for (File f : badgeByFile.keySet()) {
-            updateBadge(f);
-        }
-    }
-
-    private void updateBadge(File sourceIconFile) {
-        TextView badge = badgeByFile.get(sourceIconFile);
-        if (badge == null) return;
-        String label = getAssignedLabel(sourceIconFile);
-        if (label == null) {
-            badge.setVisibility(View.GONE);
-        } else {
-            badge.setVisibility(View.VISIBLE);
-            badge.setText(label);
-        }
-    }
-
-    /**
-     * @return "0" kalau file sumber ini lagi jadi base/back, "1/2/3/4" kalau jadi arah
-     * atas/bawah/kanan/kiri (bisa gabung koma), atau null kalau belum dipakai sama sekali.
-     */
-    @Nullable
-    private String getAssignedLabel(File sourceIconFile) {
-        String currentProfileName = ModelProvider.getCurrentProfileCanonicalName();
-        if (currentProfileName == null || currentProfileName.trim().isEmpty()) return null;
-
-        File targetDir = getProfileDpadIconDir(currentProfileName);
-        if (targetDir == null) return null;
-
-        String originalFileName = sourceIconFile.getName().toLowerCase();
-        if (!originalFileName.endsWith(".png")) return null;
-        String baseName = originalFileName.substring(0, originalFileName.length() - 4);
-        if (baseName.trim().isEmpty()) return null;
-
-        List<String> labels = new ArrayList<>();
-        if (new File(targetDir, baseName + "_cross_back.png").exists()) labels.add("0");
-        if (new File(targetDir, baseName + "_arrow_up_PRESSED.png").exists()) labels.add("1");
-        if (new File(targetDir, baseName + "_arrow_down_PRESSED.png").exists()) labels.add("2");
-        if (new File(targetDir, baseName + "_arrow_right_PRESSED.png").exists()) labels.add("3");
-        if (new File(targetDir, baseName + "_arrow_left_PRESSED.png").exists()) labels.add("4");
-        if (labels.isEmpty()) return null;
-        return android.text.TextUtils.join(",", labels);
-    }
-
-    private void handleIconSelected(File selectedFile) {
+    private void onIconTapped(File iconFile) {
         OneDpad dpad = getOneDpad();
         if (dpad == null) {
             showToast("Model bukan Dpad");
             return;
         }
 
-        String originalFileName = selectedFile.getName().toLowerCase();
-        if (!originalFileName.endsWith(".png")) {
-            showToast("File bukan PNG");
+        if (cbNeutralMode != null && cbNeutralMode.isChecked()) {
+            // Mode neutral: toggle on/off khusus utk file ini, tidak menyentuh 5 slot bernomor.
+            neutralSourceFile = iconFile.equals(neutralSourceFile) ? null : iconFile;
+            cbNeutralMode.setChecked(false);
+            persistToDisk();
+            refreshAllBadges();
             return;
         }
 
-        // Ambil nama tanpa .png
-        String baseName = originalFileName.substring(0, originalFileName.length() - 4);
-        if (baseName.trim().isEmpty()) {
-            showToast("Nama file tidak valid");
-            return;
+        int existingSlot = -1;
+        for (int s = 0; s < SLOT_COUNT; s++) {
+            if (iconFile.equals(slotSourceFiles[s])) { existingSlot = s; break; }
         }
 
-        // Ambil nama profile yang sedang aktif saat ini
+        if (existingSlot >= 0) {
+            for (int s = existingSlot; s < SLOT_COUNT - 1; s++) slotSourceFiles[s] = slotSourceFiles[s + 1];
+            slotSourceFiles[SLOT_COUNT - 1] = null;
+        } else {
+            boolean placed = false;
+            for (int s = 0; s < SLOT_COUNT; s++) {
+                if (slotSourceFiles[s] == null) { slotSourceFiles[s] = iconFile; placed = true; break; }
+            }
+            if (!placed) {
+                System.arraycopy(slotSourceFiles, 1, slotSourceFiles, 0, SLOT_COUNT - 1);
+                slotSourceFiles[SLOT_COUNT - 1] = iconFile;
+            }
+        }
+
+        persistToDisk();
+        refreshAllBadges();
+    }
+
+    private void persistToDisk() {
         String currentProfileName = ModelProvider.getCurrentProfileCanonicalName();
         if (currentProfileName == null || currentProfileName.trim().isEmpty()) {
             showToast("Tidak ada profile yang dipilih");
             return;
         }
-
         File targetDir = getProfileDpadIconDir(currentProfileName);
         if (targetDir == null) {
             showToast("Gagal membuat folder icon dpad untuk profile");
             return;
         }
 
-        boolean success = false;
-        String savedFileName = "";
-        String suffixToClear = null; // suffix persis file yg mau ditulis, dipakai buat bersihkan file lama dari sumber lain
-
-        if ("cross".equals(selectedStyle)) {
-            suffixToClear = "_cross_back.png";
-            File backFile = new File(targetDir, baseName + suffixToClear);
-            clearOldFilesWithSuffix(targetDir, suffixToClear, backFile);
-            success = copyFile(selectedFile, backFile);
-            // Jika ingin copy juga ke cross_drawable.png (opsional):
-            // File drawableFile = new File(targetDir, baseName + "_cross_drawable.png");
-            // success &= copyFile(selectedFile, drawableFile);
-
-            savedFileName = backFile.getName();
-        } 
-        else if ("neutral".equals(selectedStyle)) {
-            suffixToClear = "_neutral.png";
-            File neutralFile = new File(targetDir, baseName + suffixToClear);
-            clearOldFilesWithSuffix(targetDir, suffixToClear, neutralFile);
-            success = copyFile(selectedFile, neutralFile);
-            savedFileName = neutralFile.getName();
-        } 
-        else if ("arrow_pressed".equals(selectedStyle)) {
-            String direction = selectedArrowDirection;
-            suffixToClear = "_arrow_" + direction + "_PRESSED.png";
-            File arrowFile = new File(targetDir, baseName + suffixToClear);
-            clearOldFilesWithSuffix(targetDir, suffixToClear, arrowFile);
-            success = copyFile(selectedFile, arrowFile);
-            savedFileName = arrowFile.getName();
+        for (int s = 0; s < SLOT_COUNT; s++) {
+            File targetFile = new File(targetDir, SLOT_FILE_NAMES[s]);
+            if (slotSourceFiles[s] == null) {
+                if (targetFile.exists()) //noinspection ResultOfMethodCallIgnored
+                    targetFile.delete();
+            } else {
+                if (targetFile.exists()) //noinspection ResultOfMethodCallIgnored
+                    targetFile.delete();
+                copyFile(slotSourceFiles[s], targetFile);
+            }
         }
 
-        if (success) {
-            showToast("Icon disimpan ke profile \"" + currentProfileName + "\":\n" + savedFileName);
-            // notifyModelChanged();  // Uncomment jika ingin refresh preview D-Pad langsung
+        File neutralTarget = new File(targetDir, NEUTRAL_FILE_NAME);
+        if (neutralSourceFile == null) {
+            if (neutralTarget.exists()) //noinspection ResultOfMethodCallIgnored
+                neutralTarget.delete();
         } else {
-            showToast("Gagal menyalin icon");
+            if (neutralTarget.exists()) //noinspection ResultOfMethodCallIgnored
+                neutralTarget.delete();
+            copyFile(neutralSourceFile, neutralTarget);
         }
+
+        showToast("Icon tersimpan untuk profile \"" + currentProfileName + "\"");
     }
 
-    /**
-     * Hapus file lain (dari icon sumber lain) yang punya suffix PERSIS sama di folder profile
-     * ini, supaya cuma ada 1 file aktif per role (back/neutral/arrow_x). Sama seperti yang
-     * diterapkan di Prop1IconJoystick — biar badge indikator selalu akurat & tidak ada
-     * kandidat ganda yang bikin TouchAreaDpad salah pilih file.
-     */
-    private void clearOldFilesWithSuffix(File targetDir, String suffix, File keepFile) {
-        File[] existing = targetDir.listFiles((d, name) -> name.toLowerCase().endsWith(suffix.toLowerCase()));
-        if (existing == null) return;
-        for (File old : existing) {
-            if (!old.getName().equals(keepFile.getName())) {
-                //noinspection ResultOfMethodCallIgnored
-                old.delete();
-            }
+    private void refreshAllBadges() {
+        for (File f : badgeByFile.keySet()) updateBadge(f);
+    }
+
+    private void updateBadge(File sourceIconFile) {
+        TextView badge = badgeByFile.get(sourceIconFile);
+        if (badge == null) return;
+
+        if (sourceIconFile.equals(neutralSourceFile)) {
+            badge.setVisibility(View.VISIBLE);
+            badge.setText("N");
+            return;
+        }
+
+        int slot = -1;
+        for (int s = 0; s < SLOT_COUNT; s++) {
+            if (sourceIconFile.equals(slotSourceFiles[s])) { slot = s; break; }
+        }
+        if (slot < 0) {
+            badge.setVisibility(View.GONE);
+        } else {
+            badge.setVisibility(View.VISIBLE);
+            badge.setText(SLOT_BADGES[slot]);
         }
     }
 
@@ -473,9 +386,6 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
         return new File(patchDir, "controls/tmp/icon/dpad");
     }
 
-    /**
-     * Folder tujuan icon D-Pad sekarang mengikuti nama profile yang aktif
-     */
     private File getProfileDpadIconDir(String profileName) {
         File patchDir = QH.Files.edPatchDir();
         if (patchDir == null) return null;
@@ -495,12 +405,6 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
 
     private void showToast(String msg) {
         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
-    }
-
-    // Method ini bisa dipanggil jika ingin refresh thumbnail setelah ganti style (opsional)
-    private void updateThumbnailsIfNeeded() {
-        // iconContainer.removeAllViews();
-        // loadIconsAsync();  // atau logic refresh lain
     }
 
     @Override
