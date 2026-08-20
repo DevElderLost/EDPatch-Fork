@@ -110,12 +110,12 @@ public interface XServerViewHolder {
             case XKeyButton.GAMEPAD_DPAD_RIGHT: state.dpad[1] = down; break;
             case XKeyButton.GAMEPAD_DPAD_DOWN: state.dpad[2] = down; break;
             case XKeyButton.GAMEPAD_DPAD_LEFT: state.dpad[3] = down; break;
-            case XKeyButton.GAMEPAD_LEFT_THUMB_UP: state.thumbLY = down ? 1f : 0f; break;
-            case XKeyButton.GAMEPAD_LEFT_THUMB_DOWN: state.thumbLY = down ? -1f : 0f; break;
+            case XKeyButton.GAMEPAD_LEFT_THUMB_UP: state.thumbLY = down ? -1f : 0f; break;
+            case XKeyButton.GAMEPAD_LEFT_THUMB_DOWN: state.thumbLY = down ? 1f : 0f; break;
             case XKeyButton.GAMEPAD_LEFT_THUMB_RIGHT: state.thumbLX = down ? 1f : 0f; break;
             case XKeyButton.GAMEPAD_LEFT_THUMB_LEFT: state.thumbLX = down ? -1f : 0f; break;
-            case XKeyButton.GAMEPAD_RIGHT_THUMB_UP: state.thumbRY = down ? 1f : 0f; break;
-            case XKeyButton.GAMEPAD_RIGHT_THUMB_DOWN: state.thumbRY = down ? -1f : 0f; break;
+            case XKeyButton.GAMEPAD_RIGHT_THUMB_UP: state.thumbRY = down ? -1f : 0f; break;
+            case XKeyButton.GAMEPAD_RIGHT_THUMB_DOWN: state.thumbRY = down ? 1f : 0f; break;
             case XKeyButton.GAMEPAD_RIGHT_THUMB_RIGHT: state.thumbRX = down ? 1f : 0f; break;
             case XKeyButton.GAMEPAD_RIGHT_THUMB_LEFT: state.thumbRX = down ? -1f : 0f; break;
             default:

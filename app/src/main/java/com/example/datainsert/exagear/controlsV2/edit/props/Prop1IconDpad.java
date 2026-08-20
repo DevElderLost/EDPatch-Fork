@@ -3,6 +3,8 @@ package com.example.datainsert.exagear.controlsV2.edit.props;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.media.ThumbnailUtils;
 import android.os.Handler;
 import android.os.Looper;
@@ -10,11 +12,15 @@ import android.view.Gravity;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import android.support.annotation.Nullable;
 
 import com.eltechs.axs.Globals;
 import com.example.datainsert.exagear.QH;
@@ -27,7 +33,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Prop1IconDpad extends Prop<TouchAreaModel> {
 
@@ -40,6 +48,9 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
 
     // Untuk arrow_pressed → sub selection
     private String selectedArrowDirection = "up"; // default ketika memilih arrow_pressed
+
+    // Simpan referensi badge per file, supaya bisa direfresh semua tanpa reload ulang daftar icon
+    private final Map<File, TextView> badgeByFile = new HashMap<>();
 
     public Prop1IconDpad(Host<TouchAreaModel> host, Context c) {
         super(host, c);
@@ -175,6 +186,7 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
 
             new Handler(Looper.getMainLooper()).post(() -> {
                 iconContainer.removeAllViews();
+                badgeByFile.clear();
                 for (File iconFile : iconFiles) {
                     addIconThumbnail(iconFile);
                 }
@@ -182,6 +194,12 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
         }).start();
     }
 
+    /**
+     * Thumbnail icon dibungkus FrameLayout + badge angka kecil di pojok kanan-atas yang
+     * menandakan icon ini sedang dipakai sebagai apa untuk profile aktif:
+     * "0" = base/back (cross), "1" = arah atas, "2" = arah bawah, "3" = arah kanan,
+     * "4" = arah kiri. Badge disembunyikan kalau icon ini belum dipakai sama sekali.
+     */
     private void addIconThumbnail(File iconFile) {
         try {
             Bitmap original = BitmapFactory.decodeFile(iconFile.getAbsolutePath());
@@ -190,11 +208,14 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
             Bitmap thumb = ThumbnailUtils.extractThumbnail(original, 128, 128);
             original.recycle();
 
-            ImageView iv = new ImageView(context);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(128, 128);
-            params.setMargins(3, 4, 3, 4);
+            FrameLayout wrapper = new FrameLayout(context);
+            LinearLayout.LayoutParams wrapperParams = new LinearLayout.LayoutParams(128, 128);
+            wrapperParams.setMargins(3, 4, 3, 4);
+            wrapper.setLayoutParams(wrapperParams);
 
-            iv.setLayoutParams(params);
+            ImageView iv = new ImageView(context);
+            iv.setLayoutParams(new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             iv.setImageBitmap(thumb);
             iv.setBackground(null);
@@ -206,14 +227,82 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
                 v.animate().alpha(0.6f).setDuration(80).withEndAction(() -> {
                     v.animate().alpha(1f).setDuration(120).start();
                     handleIconSelected(iconFile);
+                    refreshAllBadges();
                 }).start();
             });
 
-            iconContainer.addView(iv);
+            wrapper.addView(iv);
+
+            TextView badge = new TextView(context);
+            FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            badgeParams.gravity = Gravity.TOP | Gravity.END;
+            badgeParams.setMargins(0, 2, 2, 0);
+            badge.setLayoutParams(badgeParams);
+            badge.setTextColor(Color.WHITE);
+            badge.setTextSize(9);
+            badge.setPadding(10, 2, 10, 2);
+            badge.setMinWidth(0);
+            badge.setGravity(Gravity.CENTER);
+            GradientDrawable badgeBg = new GradientDrawable();
+            badgeBg.setColor(0xE61976D2); // biru semi-transparan (beda warna dari badge joystick biar gampang dibedakan sekilas)
+            badgeBg.setCornerRadius(20f);
+            badge.setBackground(badgeBg);
+            wrapper.addView(badge);
+
+            badgeByFile.put(iconFile, badge);
+            updateBadge(iconFile);
+
+            iconContainer.addView(wrapper);
 
         } catch (Exception e) {
             // Lewati file error
         }
+    }
+
+    private void refreshAllBadges() {
+        for (File f : badgeByFile.keySet()) {
+            updateBadge(f);
+        }
+    }
+
+    private void updateBadge(File sourceIconFile) {
+        TextView badge = badgeByFile.get(sourceIconFile);
+        if (badge == null) return;
+        String label = getAssignedLabel(sourceIconFile);
+        if (label == null) {
+            badge.setVisibility(View.GONE);
+        } else {
+            badge.setVisibility(View.VISIBLE);
+            badge.setText(label);
+        }
+    }
+
+    /**
+     * @return "0" kalau file sumber ini lagi jadi base/back, "1/2/3/4" kalau jadi arah
+     * atas/bawah/kanan/kiri (bisa gabung koma), atau null kalau belum dipakai sama sekali.
+     */
+    @Nullable
+    private String getAssignedLabel(File sourceIconFile) {
+        String currentProfileName = ModelProvider.getCurrentProfileCanonicalName();
+        if (currentProfileName == null || currentProfileName.trim().isEmpty()) return null;
+
+        File targetDir = getProfileDpadIconDir(currentProfileName);
+        if (targetDir == null) return null;
+
+        String originalFileName = sourceIconFile.getName().toLowerCase();
+        if (!originalFileName.endsWith(".png")) return null;
+        String baseName = originalFileName.substring(0, originalFileName.length() - 4);
+        if (baseName.trim().isEmpty()) return null;
+
+        List<String> labels = new ArrayList<>();
+        if (new File(targetDir, baseName + "_cross_back.png").exists()) labels.add("0");
+        if (new File(targetDir, baseName + "_arrow_up_PRESSED.png").exists()) labels.add("1");
+        if (new File(targetDir, baseName + "_arrow_down_PRESSED.png").exists()) labels.add("2");
+        if (new File(targetDir, baseName + "_arrow_right_PRESSED.png").exists()) labels.add("3");
+        if (new File(targetDir, baseName + "_arrow_left_PRESSED.png").exists()) labels.add("4");
+        if (labels.isEmpty()) return null;
+        return android.text.TextUtils.join(",", labels);
     }
 
     private void handleIconSelected(File selectedFile) {
@@ -251,27 +340,31 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
 
         boolean success = false;
         String savedFileName = "";
-
-        // Tanpa prefix underscore agar nama file lebih bersih
-        // String prefix = "_";   // bisa diaktifkan kembali jika diperlukan
+        String suffixToClear = null; // suffix persis file yg mau ditulis, dipakai buat bersihkan file lama dari sumber lain
 
         if ("cross".equals(selectedStyle)) {
-            File backFile = new File(targetDir, baseName + "cross_back.png");
+            suffixToClear = "_cross_back.png";
+            File backFile = new File(targetDir, baseName + suffixToClear);
+            clearOldFilesWithSuffix(targetDir, suffixToClear, backFile);
             success = copyFile(selectedFile, backFile);
             // Jika ingin copy juga ke cross_drawable.png (opsional):
-            // File drawableFile = new File(targetDir, baseName + "cross_drawable.png");
+            // File drawableFile = new File(targetDir, baseName + "_cross_drawable.png");
             // success &= copyFile(selectedFile, drawableFile);
 
             savedFileName = backFile.getName();
         } 
         else if ("neutral".equals(selectedStyle)) {
-            File neutralFile = new File(targetDir, baseName + "neutral.png");
+            suffixToClear = "_neutral.png";
+            File neutralFile = new File(targetDir, baseName + suffixToClear);
+            clearOldFilesWithSuffix(targetDir, suffixToClear, neutralFile);
             success = copyFile(selectedFile, neutralFile);
             savedFileName = neutralFile.getName();
         } 
         else if ("arrow_pressed".equals(selectedStyle)) {
             String direction = selectedArrowDirection;
-            File arrowFile = new File(targetDir, baseName + "_arrow_" + direction + "_PRESSED.png");
+            suffixToClear = "_arrow_" + direction + "_PRESSED.png";
+            File arrowFile = new File(targetDir, baseName + suffixToClear);
+            clearOldFilesWithSuffix(targetDir, suffixToClear, arrowFile);
             success = copyFile(selectedFile, arrowFile);
             savedFileName = arrowFile.getName();
         }
@@ -281,6 +374,23 @@ public class Prop1IconDpad extends Prop<TouchAreaModel> {
             // notifyModelChanged();  // Uncomment jika ingin refresh preview D-Pad langsung
         } else {
             showToast("Gagal menyalin icon");
+        }
+    }
+
+    /**
+     * Hapus file lain (dari icon sumber lain) yang punya suffix PERSIS sama di folder profile
+     * ini, supaya cuma ada 1 file aktif per role (back/neutral/arrow_x). Sama seperti yang
+     * diterapkan di Prop1IconJoystick — biar badge indikator selalu akurat & tidak ada
+     * kandidat ganda yang bikin TouchAreaDpad salah pilih file.
+     */
+    private void clearOldFilesWithSuffix(File targetDir, String suffix, File keepFile) {
+        File[] existing = targetDir.listFiles((d, name) -> name.toLowerCase().endsWith(suffix.toLowerCase()));
+        if (existing == null) return;
+        for (File old : existing) {
+            if (!old.getName().equals(keepFile.getName())) {
+                //noinspection ResultOfMethodCallIgnored
+                old.delete();
+            }
         }
     }
 

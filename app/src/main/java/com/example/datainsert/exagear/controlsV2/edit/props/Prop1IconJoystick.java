@@ -3,17 +3,23 @@ package com.example.datainsert.exagear.controlsV2.edit.props;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.media.ThumbnailUtils;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import android.support.annotation.Nullable;
 
 import com.eltechs.axs.Globals;
 import com.example.datainsert.exagear.QH;
@@ -27,7 +33,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import com.eltechs.ed.R;
 
 public class Prop1IconJoystick extends Prop<TouchAreaModel> {
@@ -38,6 +46,9 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
     // Pilihan tipe joystick icon
     private String selectedType = "outer"; // default
     private final String[] TYPES = {"outer", "inner", "mousepad"};
+
+    // Simpan referensi badge per file, supaya bisa direfresh semua tanpa reload ulang daftar icon
+    private final Map<File, TextView> badgeByFile = new HashMap<>();
 
     public Prop1IconJoystick(Host<TouchAreaModel> host, Context c) {
         super(host, c);
@@ -150,6 +161,7 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
 
             new Handler(Looper.getMainLooper()).post(() -> {
                 iconContainer.removeAllViews();
+                badgeByFile.clear();
                 for (File iconFile : iconFiles) {
                     addIconThumbnail(iconFile);
                 }
@@ -157,6 +169,14 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
         }).start();
     }
 
+    /**
+     * Bikin thumbnail icon dibungkus FrameLayout + badge angka kecil di pojok kanan-atas
+     * yang menandakan icon ini sedang dipakai sebagai apa untuk profile aktif:
+     * "1" = outer, "2" = inner, "M" = mousepad (bisa gabungan mis. "1,2" kalau file sumber
+     * yang sama kebetulan dipakai untuk keduanya). Badge disembunyikan kalau icon ini
+     * belum dipakai sama sekali. Ini supaya kalau icon-nya banyak, user tidak bingung/
+     * kepencet 2x tanpa sadar sudah pilih yang mana untuk outer vs inner.
+     */
     private void addIconThumbnail(File iconFile) {
         try {
             Bitmap original = BitmapFactory.decodeFile(iconFile.getAbsolutePath());
@@ -165,11 +185,14 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
             Bitmap thumb = ThumbnailUtils.extractThumbnail(original, 128, 128);
             original.recycle();
 
-            ImageView iv = new ImageView(context);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(128, 128);
-            params.setMargins(3, 4, 3, 4);
+            FrameLayout wrapper = new FrameLayout(context);
+            LinearLayout.LayoutParams wrapperParams = new LinearLayout.LayoutParams(128, 128);
+            wrapperParams.setMargins(3, 4, 3, 4);
+            wrapper.setLayoutParams(wrapperParams);
 
-            iv.setLayoutParams(params);
+            ImageView iv = new ImageView(context);
+            iv.setLayoutParams(new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             iv.setImageBitmap(thumb);
             iv.setBackground(null);
@@ -181,14 +204,83 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
                 v.animate().alpha(0.6f).setDuration(80).withEndAction(() -> {
                     v.animate().alpha(1f).setDuration(120).start();
                     handleIconSelected(iconFile);
+                    refreshAllBadges(); // status berubah utk file ini (dan mungkin file lain yg ketiban timpa)
                 }).start();
             });
 
-            iconContainer.addView(iv);
+            wrapper.addView(iv);
+
+            TextView badge = new TextView(context);
+            FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            badgeParams.gravity = Gravity.TOP | Gravity.END;
+            badgeParams.setMargins(0, 2, 2, 0);
+            badge.setLayoutParams(badgeParams);
+            badge.setTextColor(Color.WHITE);
+            badge.setTextSize(9);
+            badge.setPadding(10, 2, 10, 2);
+            badge.setMinWidth(0);
+            badge.setGravity(Gravity.CENTER);
+            GradientDrawable badgeBg = new GradientDrawable();
+            badgeBg.setColor(0xE6E53935); // merah semi-transparan, kontras di atas thumbnail apapun
+            badgeBg.setCornerRadius(20f);
+            badge.setBackground(badgeBg);
+            wrapper.addView(badge);
+
+            badgeByFile.put(iconFile, badge);
+            updateBadge(iconFile);
+
+            iconContainer.addView(wrapper);
 
         } catch (Exception e) {
             // Lewati file error
         }
+    }
+
+    /** Refresh badge SEMUA thumbnail yang lagi tampil (dipanggil tiap habis simpan). */
+    private void refreshAllBadges() {
+        for (File f : badgeByFile.keySet()) {
+            updateBadge(f);
+        }
+    }
+
+    /** Update 1 badge sesuai status assignment file sumber ini utk profile aktif saat ini. */
+    private void updateBadge(File sourceIconFile) {
+        TextView badge = badgeByFile.get(sourceIconFile);
+        if (badge == null) return;
+        String label = getAssignedLabel(sourceIconFile);
+        if (label == null) {
+            badge.setVisibility(View.GONE);
+        } else {
+            badge.setVisibility(View.VISIBLE);
+            badge.setText(label);
+        }
+    }
+
+    /**
+     * @return "1" kalau file sumber ini lagi jadi outer, "2" kalau inner, "M" kalau mousepad
+     * profile aktif (bisa gabungan dgn koma kalau lebih dari satu), atau null kalau belum
+     * dipakai sama sekali.
+     */
+    @Nullable
+    private String getAssignedLabel(File sourceIconFile) {
+        String currentProfileName = ModelProvider.getCurrentProfileCanonicalName();
+        if (currentProfileName == null || currentProfileName.trim().isEmpty()) return null;
+
+        File targetDir = getProfileJoystickIconDir(currentProfileName);
+        if (targetDir == null) return null;
+
+        String originalFileName = sourceIconFile.getName().toLowerCase();
+        if (!originalFileName.endsWith(".png")) return null;
+        String baseName = originalFileName.substring(0, originalFileName.length() - 4);
+        if (baseName.trim().isEmpty()) return null;
+
+        List<String> labels = new ArrayList<>();
+        if (new File(targetDir, baseName + "_outer.png").exists()) labels.add("1");
+        if (new File(targetDir, baseName + "_inner.png").exists()) labels.add("2");
+        if (new File(targetDir, baseName + "_mousepad.png").exists()) labels.add("M");
+        if (labels.isEmpty()) return null;
+        return android.text.TextUtils.join(",", labels);
     }
 
     private void handleIconSelected(File selectedFile) {
@@ -239,6 +331,21 @@ public class Prop1IconJoystick extends Prop<TouchAreaModel> {
         }
 
         savedFileName = targetFile.getName();
+
+        // Bersihkan file lama dengan suffix tipe yang sama (dari icon sumber LAIN) supaya
+        // cuma ada 1 file aktif per tipe (_outer/_inner/_mousepad) di folder profile ini.
+        // Kalau ini tidak dibersihkan: (a) badge di icon lama jadi nyangkut/salah,
+        // (b) loadPngFromIconDir bisa nemu >1 kandidat lagi kalau nanti ada perubahan baseName.
+        String suffixToClear = "_" + selectedType + ".png";
+        File[] existing = targetDir.listFiles((d, name) -> name.toLowerCase().endsWith(suffixToClear));
+        if (existing != null) {
+            for (File old : existing) {
+                if (!old.getName().equals(targetFile.getName())) {
+                    //noinspection ResultOfMethodCallIgnored
+                    old.delete();
+                }
+            }
+        }
 
         // Hapus file lama jika sudah ada (overwrite)
         if (targetFile.exists()) {

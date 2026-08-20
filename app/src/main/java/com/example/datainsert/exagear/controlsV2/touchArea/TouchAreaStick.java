@@ -84,18 +84,23 @@ public class TouchAreaStick extends TouchArea<OneStick> {
         Drawable customOuter = null;
 
         if (isMouseMode) {
-            // Mode trackpad: prioritas nama yang relevan
-            customOuter = loadPngFromIconDir("trackpad", false);
-            if (customOuter == null) customOuter = loadPngFromIconDir("mousepad", false);
+            // Mode trackpad: cari suffix "_mousepad" persis dulu (sesuai yang disimpan
+            // Prop1IconJoystick), baru fallback ke nama umum lain (utk file yg ditaruh manual).
+            customOuter = loadPngFromIconDir("_mousepad", false);
+            if (customOuter == null) customOuter = loadPngFromIconDir("trackpad", false);
             if (customOuter == null) customOuter = loadPngFromIconDir("touchpad", false);
             if (customOuter == null) customOuter = loadPngFromIconDir("track_pad", false);
             if (customOuter == null) customOuter = loadPngFromIconDir("mouse_area", false);
         } else {
-            // Mode joystick normal
-            customOuter = loadPngFromIconDir("stick_outer", false);
-            if (customOuter == null) customOuter = loadPngFromIconDir("outer", false);
-            if (customOuter == null) customOuter = loadPngFromIconDir("base", false);
+            // Mode joystick normal — cari suffix "_outer" persis dulu (sesuai yang disimpan
+            // Prop1IconJoystick), baru fallback ke nama umum. TIDAK boleh fallback ke "stick"
+            // saja karena nama file dasarnya (dari folder tmp/icon/stick) hampir selalu
+            // mengandung substring "stick" juga di file _inner-nya (mis. "joystick1_outer.png"
+            // vs "joystick1_inner.png" sama2 mengandung "stick") -> bikin outer & inner ketuker.
+            customOuter = loadPngFromIconDir("_outer", false);
+            if (customOuter == null) customOuter = loadPngFromIconDir("stick_outer", false);
             if (customOuter == null) customOuter = loadPngFromIconDir("circle_outer", false);
+            if (customOuter == null) customOuter = loadPngFromIconDir("base", false);
         }
 
         if (customOuter != null) {
@@ -111,10 +116,11 @@ public class TouchAreaStick extends TouchArea<OneStick> {
 
         // Inner hanya di-load jika BUKAN mode mouse
         if (!isMouseMode) {
-            Drawable customInner = loadPngFromIconDir("stick_inner", false);
-            if (customInner == null) customInner = loadPngFromIconDir("inner", false);
+            // Cari suffix "_inner" persis dulu, baru "knob". "stick" SENGAJA dibuang dari
+            // fallback (lihat penjelasan di atas outer) supaya tidak ketuker sama file _outer.
+            Drawable customInner = loadPngFromIconDir("_inner", false);
+            if (customInner == null) customInner = loadPngFromIconDir("stick_inner", false);
             if (customInner == null) customInner = loadPngFromIconDir("knob", false);
-            if (customInner == null) customInner = loadPngFromIconDir("stick", false);
 
             if (customInner != null) {
                 mInnerDrawable = customInner.mutate();

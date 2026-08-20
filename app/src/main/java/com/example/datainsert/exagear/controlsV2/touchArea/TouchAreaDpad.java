@@ -92,8 +92,10 @@ public class TouchAreaDpad extends TouchAreaStick {
         //   CUSTOM dari folder edpatch/controls/[profile]/icon/dpad/ (prioritas tertinggi)
         // ─────────────────────────────────────────────
 
-        // Cross background / base
-        Drawable customCrossBack = loadPngFromIconDir("cross_back", false);
+        // Cross background / base — cari suffix "_cross_back" persis dulu (sesuai yg
+        // disimpan Prop1IconDpad), badge "0" di editor mengacu ke file ini.
+        Drawable customCrossBack = loadPngFromIconDir("_cross_back", false);
+        if (customCrossBack == null) customCrossBack = loadPngFromIconDir("cross_back", false);
         if (customCrossBack != null) {
             mCrossBack = customCrossBack.mutate();
         } else if (style == FILL || style == FILL_STROKE) {
@@ -101,7 +103,7 @@ public class TouchAreaDpad extends TouchAreaStick {
             if (mCrossBack != null) mCrossBack = mCrossBack.mutate();
         }
 
-        // Cross utama (garis / outline)
+        // Cross utama (garis / outline) — belum ada opsi simpannya di Prop1IconDpad saat ini
         Drawable customCross = loadPngFromIconDir("cross_drawable", false);
         if (customCross == null) customCross = loadPngFromIconDir("cross_front", false);
         if (customCross != null) {
@@ -111,8 +113,9 @@ public class TouchAreaDpad extends TouchAreaStick {
             if (mCrossDrawable != null) mCrossDrawable = mCrossDrawable.mutate();
         }
 
-        // Neutral arrows (semua arah kelihatan samar)
-        Drawable customNeutral = loadPngFromIconDir("neutral", false);
+        // Neutral arrows (semua arah kelihatan samar) — cari suffix "_neutral" persis dulu
+        Drawable customNeutral = loadPngFromIconDir("_neutral", false);
+        if (customNeutral == null) customNeutral = loadPngFromIconDir("neutral", false);
         if (customNeutral == null) customNeutral = loadPngFromIconDir("cross_neutral", false);
         if (customNeutral != null) {
             mNeutralArrowsDrawable = customNeutral.mutate();
