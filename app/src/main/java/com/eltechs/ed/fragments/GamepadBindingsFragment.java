@@ -99,10 +99,10 @@ public class GamepadBindingsFragment extends Fragment {
             ViewHolder(View itemView) {
                 super(itemView);
                 root = itemView;
-                image = itemView.findViewById(R.id.image);
-                text = itemView.findViewById(R.id.text);
-                subtext = itemView.findViewById(R.id.subtext);
-                button = itemView.findViewById(R.id.button);
+                image = itemView.findViewById(2131296401);
+                text = itemView.findViewById(2131296508);
+                subtext = itemView.findViewById(2131296504);
+                button = itemView.findViewById(2131296309);
                 if (button != null) button.setVisibility(View.GONE); // tidak butuh tombol titik-tiga
                 if (image != null) image.setVisibility(View.GONE); // tidak butuh icon di kiri
             }
@@ -111,7 +111,7 @@ public class GamepadBindingsFragment extends Fragment {
         @Override
         public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
             View view = LayoutInflater.from(parent.getContext())
-                    .inflate(R.layout.ex_basic_list_item_with_button, parent, false);
+                    .inflate(2131427359, parent, false);
             return new ViewHolder(view);
         }
 
