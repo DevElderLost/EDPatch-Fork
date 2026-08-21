@@ -95,6 +95,7 @@ public class GamepadBindingsFragment extends Fragment {
             TextView text;
             TextView subtext;
             ImageButton button;
+            ImageButton swapButton;
 
             ViewHolder(View itemView) {
                 super(itemView);
@@ -105,6 +106,13 @@ public class GamepadBindingsFragment extends Fragment {
                 button = itemView.findViewById(2131296309);
                 if (button != null) button.setVisibility(View.GONE); // tidak butuh tombol titik-tiga
                 if (image != null) image.setVisibility(View.GONE); // tidak butuh icon di kiri
+
+                // ImageButton "current_cont" (ic_swap_24dp) dipakai ulang sebagai tombol reset binding.
+                swapButton = itemView.findViewById(2131300839);
+                if (swapButton != null) {
+                    swapButton.setVisibility(View.VISIBLE);
+                    swapButton.setContentDescription("Reset binding");
+                }
             }
         }
 
@@ -124,6 +132,10 @@ public class GamepadBindingsFragment extends Fragment {
             holder.subtext.setText(getBindingStatusText(gamepadCode));
 
             holder.root.setOnClickListener(v -> showBindDialog(holder, position, label, gamepadCode));
+
+            if (holder.swapButton != null) {
+                holder.swapButton.setOnClickListener(v -> showResetBindingDialog(holder, position, label, gamepadCode));
+            }
         }
 
         @Override
@@ -190,6 +202,42 @@ public class GamepadBindingsFragment extends Fragment {
         });
 
         dialog.show();
+    }
+
+    private void showResetBindingDialog(final BindingsAdapter.ViewHolder holder, final int position, final String label, final int gamepadCode) {
+        Context c = getContext();
+        if (c == null) return;
+
+        SharedPreferences prefs = getPrefs();
+        if (findBoundKeyName(prefs, gamepadCode) == null) {
+            Toast.makeText(c, label + " belum di-bind", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AlertDialog.Builder(c)
+                .setTitle("Reset binding: " + label)
+                .setMessage("Hapus binding tombol fisik untuk \"" + label + "\"?")
+                .setNegativeButton("Batal", (dialog, which) -> dialog.dismiss())
+                .setPositiveButton("Reset", (dialog, which) -> {
+                    resetBinding(gamepadCode);
+                    if (mAdapter != null) mAdapter.notifyItemChanged(position);
+                    Toast.makeText(c, "Binding " + label + " direset", Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                })
+                .show();
+    }
+
+    private void resetBinding(int gamepadCode) {
+        SharedPreferences prefs = getPrefs();
+        SharedPreferences.Editor editor = prefs.edit();
+
+        for (String prefKey : prefs.getAll().keySet()) {
+            if (prefs.getInt(prefKey, -1) == gamepadCode) {
+                editor.remove(prefKey);
+            }
+        }
+
+        editor.apply();
     }
 
     private void saveBinding(int physicalKeyCode, int gamepadCode) {
