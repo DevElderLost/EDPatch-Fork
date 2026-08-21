@@ -120,6 +120,45 @@ public class GamepadServer {
         }
     }
 
+    // ── Sembunyikan/tampilkan touch area virtual saat gamepad fisik terdeteksi/terbind ──
+    private Boolean lastAppliedVisible = null; // null = belum pernah di-apply, hindari kerja dobel
+
+    /**
+     * Tampilkan/sembunyikan SELURUH touch area virtual ControlsV2 (bukan cuma tombol
+     * ber-GAMEPAD_MASK, tapi seluruh profile — termasuk tombol keyboard-mapped biasa),
+     * dengan asumsi kalau gamepad fisik lagi dipakai, user juga tidak butuh sentuhan layar
+     * utk hal lain. Pemicunya: {@link com.eltechs.axs.activities.XServerDisplayActivity}
+     * (deteksi InputManager device gamepad terhubung ATAU ada binding tersimpan).
+     * <br/> Logika show/hide sebenarnya (OneProfile.showTouchArea + syncAreaList) SUDAH ADA
+     * sebelumnya (toggle manual di Edit4OtherView) — cuma belum ada trigger otomatisnya,
+     * dan toggle manual itu sendiri ternyata cuma set flag tanpa resync langsung, jadi di
+     * sini saya panggil TouchAreaView.setProfile() ulang supaya benar2 ter-refresh live.
+     */
+    public void setVirtualControlsVisible(boolean visible) {
+        if (lastAppliedVisible != null && lastAppliedVisible == visible) return; // sudah sesuai, skip
+
+        try {
+            com.example.datainsert.exagear.controlsV2.model.OneProfile profile =
+                    com.example.datainsert.exagear.controlsV2.Const.getActiveProfile();
+            if (profile == null) return;
+
+            profile.setShowTouchArea(visible);
+
+            com.example.datainsert.exagear.controlsV2.TouchAreaView touchView =
+                    com.example.datainsert.exagear.controlsV2.Const.getTouchView();
+            if (touchView != null) {
+                touchView.setProfile(profile); // paksa syncAreaList() ulang + redraw
+            }
+
+            lastAppliedVisible = visible;
+            Log.d(TAG, "touch area virtual di-set " + (visible ? "TAMPIL" : "SEMBUNYI") + " (gamepad fisik)");
+        } catch (Exception e) {
+            // Const/TouchAreaView belum siap (mis. belum masuk sesi game) -> abaikan diam-diam,
+            // nanti dicoba lagi otomatis di panggilan berikutnya (mis. pas onResume berikutnya)
+            Log.w(TAG, "gagal set visibility touch area (belum ada sesi game aktif?)", e);
+        }
+    }
+
     private void runReceiveLoop() {
         try {
             socket = new DatagramSocket(null);
