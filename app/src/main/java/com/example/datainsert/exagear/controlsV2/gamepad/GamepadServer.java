@@ -49,6 +49,15 @@ public class GamepadServer {
     private final GamepadState state = new GamepadState();
     private final CopyOnWriteArrayList<Integer> notifyClients = new CopyOnWriteArrayList<>();
 
+    // ── Mode aktif: virtual (on-screen ControlsV2) vs fisik (gamepad Bluetooth/USB) ──
+    // SENGAJA hanya SATU yang aktif dalam satu waktu (persis pola Winlator:
+    // WinHandler.GET_GAMEPAD -> "useVirtualGamepad" gate), supaya tidak ada 2 sumber input
+    // yang sama-sama nulis ke GamepadState di saat bersamaan dan saling timpa/rebutan.
+    // Berpindah otomatis: begitu ada input dari salah satu sumber, mode langsung pindah
+    // ke sumber itu (dan state direset SEKALI saat transisi, supaya nilai nyangkut dari
+    // sumber sebelumnya, mis. stick fisik yang lagi dibelokkan lalu ditinggal, tidak "nempel").
+    private volatile boolean virtualModeActive = true;
+
     private DatagramSocket socket;
     private InetAddress localhost;
     private volatile boolean running = false;
@@ -65,9 +74,26 @@ public class GamepadServer {
         return state;
     }
 
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-        if (!enabled) state.reset();
+    public boolean isVirtualModeActive() {
+        return virtualModeActive;
+    }
+
+    /** Dipanggil dari jalur virtual (XServerViewHolder.setGamepadInput) SEBELUM menulis state. */
+    public synchronized void switchToVirtual() {
+        if (!virtualModeActive) {
+            virtualModeActive = true;
+            state.reset(); // buang nilai nyangkut dari mode fisik sebelumnya
+            Log.d(TAG, "beralih ke mode virtual (on-screen ControlsV2)");
+        }
+    }
+
+    /** Dipanggil dari jalur fisik (XServerDisplayActivity, tombol/analog gamepad Bluetooth/USB) SEBELUM menulis state. */
+    public synchronized void switchToPhysical() {
+        if (virtualModeActive) {
+            virtualModeActive = false;
+            state.reset(); // buang nilai nyangkut dari mode virtual sebelumnya
+            Log.d(TAG, "beralih ke mode fisik (gamepad Bluetooth/USB)");
+        }
     }
 
     /** Panggil sekali saat activity/game session dimulai (mis. di onCreate XServerViewHolderImpl / activity utama). */

@@ -86,6 +86,7 @@ public interface XServerViewHolder {
      * @param down true = ditekan, false = dilepas
      */
     default void setGamepadInput(int gamepadCode, boolean down) {
+        GamepadServer.getInstance().switchToVirtual(); // pastikan mode virtual aktif, bukan fisik (lihat GamepadServer)
         GamepadState state = GamepadServer.getInstance().getState();
         switch (gamepadCode) {
             case XKeyButton.GAMEPAD_A: state.setPressed(GamepadState.IDX_BUTTON_A, down); break;
