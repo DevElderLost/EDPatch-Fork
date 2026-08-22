@@ -108,37 +108,55 @@ public class PostProcessRenderer implements GLSurfaceView.Renderer,
         this.sourceHeight = Math.max(1, h);
     }
 
+    private volatile boolean pipelineReady = false;
+
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        int[] tex = new int[1];
-        GLES20.glGenTextures(1, tex, 0);
-        oesTextureId = tex[0];
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTextureId);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
-                GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
-                GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
-                GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
-                GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+        try {
+            int[] tex = new int[1];
+            GLES20.glGenTextures(1, tex, 0);
+            oesTextureId = tex[0];
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTextureId);
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+                    GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+                    GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+                    GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+                    GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
 
-        surfaceTexture = new SurfaceTexture(oesTextureId);
-        surfaceTexture.setOnFrameAvailableListener(this);
-        inputSurface = new Surface(surfaceTexture);
+            surfaceTexture = new SurfaceTexture(oesTextureId);
+            surfaceTexture.setOnFrameAvailableListener(this);
+            inputSurface = new Surface(surfaceTexture);
 
-        progUpscale = ShaderHelpersBridge.buildProgram(
-                GLSL.PASSTHROUGH_VERT, GLSL.SOURCE_UPSCALE_FRAG);
-        progBrightpass = ShaderHelpersBridge.buildProgram(
-                GLSL.PASSTHROUGH_VERT, GLSL.BRIGHTPASS_FRAG);
-        progBlur = ShaderHelpersBridge.buildProgram(
-                GLSL.PASSTHROUGH_VERT, GLSL.GAUSSIAN_BLUR_FRAG);
-        progComposite = ShaderHelpersBridge.buildProgram(
-                GLSL.PASSTHROUGH_VERT, GLSL.COMPOSITE_FRAG);
+            progUpscale = ShaderHelpersBridge.buildProgram(
+                    GLSL.PASSTHROUGH_VERT, GLSL.SOURCE_UPSCALE_FRAG);
+            progBrightpass = ShaderHelpersBridge.buildProgram(
+                    GLSL.PASSTHROUGH_VERT, GLSL.BRIGHTPASS_FRAG);
+            progBlur = ShaderHelpersBridge.buildProgram(
+                    GLSL.PASSTHROUGH_VERT, GLSL.GAUSSIAN_BLUR_FRAG);
+            progComposite = ShaderHelpersBridge.buildProgram(
+                    GLSL.PASSTHROUGH_VERT, GLSL.COMPOSITE_FRAG);
 
-        allocateFbos();
+            allocateFbos();
 
-        readyLatch.countDown();
+            pipelineReady = true;
+        } catch (Throwable t) {
+            // JANGAN biarkan exception nembus keluar dari GL thread - itu bisa
+            // matiin seluruh proses aplikasi. Kalau gagal, kita fallback:
+            // - inputSurface tetap null kalau gagal sebelum sempat dibuat
+            //   -> lambda$onCreate$0 di MainActivity otomatis pakai Surface asli
+            // - kalau inputSurface SUDAH sempat dibuat tapi shader gagal,
+            //   pipelineReady tetap false -> onDrawFrame skip semua kerja GL
+            android.util.Log.e("PostProcessRenderer",
+                    "Gagal init GL pipeline, fallback ke passthrough tanpa efek", t);
+            pipelineReady = false;
+        } finally {
+            // Selalu buka latch supaya getInputSurface() di caller gak nunggu
+            // penuh 2 detik kalau memang sudah pasti gagal/berhasil di sini.
+            readyLatch.countDown();
+        }
     }
 
     private void allocateFbos() {
@@ -180,6 +198,23 @@ public class PostProcessRenderer implements GLSurfaceView.Renderer,
 
     @Override
     public void onDrawFrame(GL10 gl) {
+        if (!pipelineReady) {
+            // Init gagal - jangan lakukan apapun, biar GLSurfaceView cuma nge-clear
+            // layar (transparan/hitam) daripada crash. Karena Surface asli LorieView
+            // sudah otomatis dipakai lagi oleh MainActivity (fallback timeout), user
+            // tetap lihat desktop termux-x11 normal tanpa efek - cuma lewat SurfaceView
+            // aslinya, bukan lewat GLSurfaceView overlay ini.
+            return;
+        }
+
+        try {
+            drawFrameInternal();
+        } catch (Throwable t) {
+            android.util.Log.e("PostProcessRenderer", "Error saat render frame, skip frame ini", t);
+        }
+    }
+
+    private void drawFrameInternal() {
         synchronized (this) {
             if (frameAvailable) {
                 surfaceTexture.updateTexImage();
