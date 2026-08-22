@@ -31,6 +31,18 @@ public final class DRI3Requests extends HandlerObjectBase {
         dispatcher.installRequestHandler(Opcodes.Open, this::handleOpen);
         dispatcher.installRequestHandler(Opcodes.PixmapFromBuffer, this::handlePixmapFromBuffer);
         dispatcher.installRequestHandler(Opcodes.BufferFromPixmap, this::handleBufferFromPixmap);
+        // Ditambahkan: opcode 4/5 sudah punya konstanta di Opcodes.java sejak
+        // awal tapi tidak pernah didaftarkan ke dispatcher - padanan persis
+        // dari patch yang sudah diterapkan ke DRI3Requests.smali (eltechs.zip)
+        // minggu lalu. Server ini tidak punya infrastruktur explicit-sync
+        // fence sama sekali (tidak ada pemetaan ke sync_file/dma-fence di
+        // Dri3BufferAllocator manapun), jadi bukan implementasi fence
+        // sungguhan - ini membalas BadImplementation yang benar secara
+        // protokol X11, supaya client fence-aware (Mesa modern) mendapat
+        // jawaban jelas dan bisa fallback dengan baik, alih-alih server
+        // diam / client salah baca sisa byte request berikutnya.
+        dispatcher.installRequestHandler(Opcodes.FenceFromFD, this::handleFenceFromFDUnsupported);
+        dispatcher.installRequestHandler(Opcodes.FDFromFence, this::handleFDFromFenceUnsupported);
     }
 
     private void handleQueryVersion(XClient client, int seq, byte minorOpcode,
@@ -82,5 +94,17 @@ public final class DRI3Requests extends HandlerObjectBase {
             return;
         }
         response.sendReplyWithFd((byte) 1, seq, info.fd, info);
+    }
+
+    private void handleFenceFromFDUnsupported(XClient client, int seq, byte minorOpcode,
+                                               XRequest request, XResponse response) throws java.io.IOException {
+        request.skipRequest();
+        response.sendError(new com.eltechs.axs.proto.input.errors.BadImplementation());
+    }
+
+    private void handleFDFromFenceUnsupported(XClient client, int seq, byte minorOpcode,
+                                               XRequest request, XResponse response) throws java.io.IOException {
+        request.skipRequest();
+        response.sendError(new com.eltechs.axs.proto.input.errors.BadImplementation());
     }
 }

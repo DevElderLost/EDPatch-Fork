@@ -24,12 +24,15 @@ import com.eltechs.axs.xserver.events.MapRequest;
 import com.eltechs.axs.xserver.events.MappingNotify;
 import com.eltechs.axs.xserver.events.MotionNotify;
 import com.eltechs.axs.xserver.events.PointerWindowEvent;
+import com.eltechs.axs.xserver.events.PresentCompleteNotify;
 import com.eltechs.axs.xserver.events.PropertyNotify;
 import com.eltechs.axs.xserver.events.ResizeRequest;
 import com.eltechs.axs.xserver.events.SelectionClear;
 import com.eltechs.axs.xserver.events.SelectionNotify;
 import com.eltechs.axs.xserver.events.SelectionRequest;
 import com.eltechs.axs.xserver.events.UnmapNotify;
+import com.eltechs.axs.xserver.events.ExtensionEventCodes;
+import com.eltechs.axs.requestHandlers.X11ProtocolExtensionIds;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -308,6 +311,39 @@ public class XEventSender {
                         byteBuffer.put((byte) mappingNotify.getCount());
                     }
                 });
+            }
+        });
+        // BARU: PresentCompleteNotify - satu-satunya event XGE yang
+        // benar-benar dikirim server ini saat ini. Berbeda dari SEMUA
+        // entry di atas: dikirim lewat sendGenericEvent() (bukan
+        // sendEvent() klasik) karena Present adalah X Generic Event (type
+        // selalu 35, bukan kode event core per-extension). Layout byte
+        // diverifikasi terhadap presentproto.txt Appendix A.3
+        // "PresentCompleteNotify":
+        //   evtype(2) kind(1) mode(1) eid(4) window(4) serial(4) ust(8) msc(8)
+        // = 22 byte tetap (masuk 32 byte pertama xGenericEvent bersama 10
+        // byte header standar) + 8 byte 'msc' sbg payload tambahan
+        // (extraPayloadWords=2, karena msc CARD64 = 2 blok 4-byte).
+        eventWriters.put(PresentCompleteNotify.class, new EventWriter<PresentCompleteNotify>() {
+            @Override
+            public void sendEvent(XResponse xResponse, final PresentCompleteNotify presentCompleteNotify) throws IOException {
+                xResponse.sendGenericEvent(
+                        (byte) X11ProtocolExtensionIds.PRESENT,
+                        (short) ExtensionEventCodes.PRESENT_EVTYPE_COMPLETE_NOTIFY,
+                        /*extraPayloadWords=*/2,
+                        new XResponse.ResponseDataWriter() {
+                            @Override
+                            public void write(ByteBuffer byteBuffer) {
+                                byteBuffer.putShort((short) ExtensionEventCodes.PRESENT_EVTYPE_COMPLETE_NOTIFY);
+                                byteBuffer.put((byte) presentCompleteNotify.getKind());
+                                byteBuffer.put((byte) presentCompleteNotify.getMode());
+                                byteBuffer.putInt(presentCompleteNotify.getEventId());
+                                byteBuffer.putInt(presentCompleteNotify.getWindow().getId());
+                                byteBuffer.putInt(presentCompleteNotify.getSerial());
+                                byteBuffer.putLong(presentCompleteNotify.getUst());
+                                byteBuffer.putLong(presentCompleteNotify.getMsc());
+                            }
+                        });
             }
         });
     }

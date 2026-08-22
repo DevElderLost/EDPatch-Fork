@@ -3,8 +3,10 @@ package com.eltechs.axs.proto;
 import com.eltechs.axs.proto.input.annotations.AnnotationDrivenRequestDispatcherConfigurer;
 import com.eltechs.axs.proto.input.impl.CoreXProtocolDispatcher;
 import com.eltechs.axs.proto.input.impl.DRI2ExtensionDispatcher;
+import com.eltechs.axs.proto.input.impl.DRI3ExtensionDispatcher;
 import com.eltechs.axs.proto.input.impl.GLXExtensionDispatcher;
 import com.eltechs.axs.proto.input.impl.MITShmExtensionDispatcher;
+import com.eltechs.axs.proto.input.impl.PresentExtensionDispatcher;
 import com.eltechs.axs.proto.input.impl.RootXRequestHandler;
 import com.eltechs.axs.proto.input.impl.XRequestParameterReaderFactories;
 import com.eltechs.axs.proto.input.impl.XTestExtensionDispatcher;
@@ -28,8 +30,11 @@ import com.eltechs.axs.requestHandlers.core.SelectionManipulationRequests;
 import com.eltechs.axs.requestHandlers.core.SystemRequests;
 import com.eltechs.axs.requestHandlers.core.WindowManipulationRequests;
 import com.eltechs.axs.requestHandlers.dri2.DRI2Requests;
+import com.eltechs.axs.requestHandlers.dri3.DRI3Requests;
+import com.eltechs.axs.requestHandlers.dri3.Dri3BufferAllocator;
 import com.eltechs.axs.requestHandlers.glx.GLXRequests;
 import com.eltechs.axs.requestHandlers.mitshm.MITShmRequests;
+import com.eltechs.axs.requestHandlers.present.PresentRequests;
 import com.eltechs.axs.requestHandlers.xtest.XTestRequests;
 import com.eltechs.axs.xserver.XServer;
 
@@ -48,6 +53,20 @@ public class RootXRequestHandlerConfigurer {
         if (xServer.isHWRenderingAvailable()) {
             rootXRequestHandler.installExtensionHandler(X11ProtocolExtensionIds.DRI2, configureDRI2Dispatcher(xServer));
             rootXRequestHandler.installExtensionHandler(X11ProtocolExtensionIds.GLX, configureGLXDispatcher(xServer));
+            // Ditambahkan: DRI3Requests dan PresentRequests sebelumnya ADA
+            // sebagai kelas lengkap (opcode, handler, Javadoc arsitektur) tapi
+            // TIDAK PERNAH diinstansiasi di mana pun dalam project - installInto()
+            // masing-masing tidak pernah terpanggil, jadi kedua extension ini
+            // tidak pernah benar-benar aktif di server yang berjalan. Ini
+            // menyambungkannya, mengikuti pola persis DRI2/GLX di atas (satu
+            // syarat: isHWRenderingAvailable(), karena DRI3/Present secara
+            // desain butuh direct rendering yang sama seperti DRI2/GLX).
+            // Satu Dri3BufferAllocator dibagi ke keduanya - PresentRequests
+            // butuh instance yang sama supaya import EGLImage dari
+            // DRI3.PixmapFromBuffer terlihat oleh Present.Pixmap nantinya.
+            Dri3BufferAllocator dri3BufferAllocator = new Dri3BufferAllocator();
+            rootXRequestHandler.installExtensionHandler(X11ProtocolExtensionIds.DRI3, configureDRI3Dispatcher(xServer, dri3BufferAllocator));
+            rootXRequestHandler.installExtensionHandler(X11ProtocolExtensionIds.PRESENT, configurePresentDispatcher(xServer, dri3BufferAllocator));
         }
         return rootXRequestHandler;
     }
@@ -102,5 +121,25 @@ public class RootXRequestHandlerConfigurer {
         GLXExtensionDispatcher gLXExtensionDispatcher = new GLXExtensionDispatcher();
         new AnnotationDrivenRequestDispatcherConfigurer(gLXExtensionDispatcher, XRequestParameterReaderFactories.CONTEXT_PARAM_READERS_FACTORY, XRequestParameterReaderFactories.REQUEST_PARAM_READERS_FACTORY).configureDispatcher(new GLXRequests(xServer));
         return gLXExtensionDispatcher;
+    }
+
+    // Ditambahkan: DRI3Requests dan PresentRequests TIDAK memakai pola
+    // @annotation + AnnotationDrivenRequestDispatcherConfigurer seperti
+    // DRI2Requests/GLXRequests di atas - keduanya sudah punya installInto()
+    // manual sendiri yang langsung memanggil dispatcher.installRequestHandler()
+    // per opcode (lihat DRI3Requests.java / PresentRequests.java). Ini valid
+    // karena TrivialExtensionDispatcher (superclass dari DRI3ExtensionDispatcher
+    // dan PresentExtensionDispatcher) sudah mengimplementasikan interface
+    // ConfigurableRequestsDispatcher yang jadi parameter installInto().
+    private static DRI3ExtensionDispatcher configureDRI3Dispatcher(XServer xServer, Dri3BufferAllocator dri3BufferAllocator) {
+        DRI3ExtensionDispatcher dri3ExtensionDispatcher = new DRI3ExtensionDispatcher();
+        new DRI3Requests(xServer, dri3BufferAllocator).installInto(dri3ExtensionDispatcher);
+        return dri3ExtensionDispatcher;
+    }
+
+    private static PresentExtensionDispatcher configurePresentDispatcher(XServer xServer, Dri3BufferAllocator dri3BufferAllocator) {
+        PresentExtensionDispatcher presentExtensionDispatcher = new PresentExtensionDispatcher();
+        new PresentRequests(xServer, dri3BufferAllocator).installInto(presentExtensionDispatcher);
+        return presentExtensionDispatcher;
     }
 }

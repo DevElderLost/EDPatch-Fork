@@ -229,4 +229,75 @@ public class XResponse {
             }
         }
     }
+
+    /**
+     * BARU: infrastruktur X Generic Event (XGE) - proyek ini sebelumnya
+     * TIDAK PUNYA kode XGE sama sekali. Wire format diverifikasi persis
+     * terhadap header resmi X.org (presentproto.h, xproto GenericEvent
+     * spec - https://www.x.org/releases/X11R7.6/doc/xextproto/geproto.html):
+     *
+     *   byte  0    : type       - SELALU 35 (GenericEvent), bukan opcode
+     *                             extension seperti event klasik
+     *   byte  1    : extension  - major opcode extension (mis. 156=Present)
+     *   byte  2-3  : sequenceNumber (CARD16)
+     *   byte  4-7  : length     - CARD32, jumlah blok 4-byte SETELAH byte
+     *                             ke-32 (BUKAN total panjang event!). 0
+     *                             kalau event pas 32 byte (spt PresentIdleNotify)
+     *   byte  8-9  : evtype     - CARD16, sub-tipe event dalam extension ini
+     *   byte 10-31 : sisa header 32-byte + payload evtype-specific (22 byte
+     *                pertama dari sisa ini WAJIB ada meski extension event-nya
+     *                cuma 32 byte total - itulah "22 byte" standar xGenericEvent)
+     *   byte 32+   : payload tambahan kalau length > 0 (length*4 byte)
+     *
+     * payloadAfterEvtype: BufferFiller yang WAJIB mengisi TEPAT
+     * (22 + extraPayloadWords*4) byte - dihitung dan divalidasi oleh
+     * caller (lihat EventWriter untuk PresentCompleteNotify.class di
+     * XEventSender.java), bukan oleh method ini, supaya kesalahan ukuran
+     * ketahuan dari sisi pemanggil yang tahu struct event mana yang
+     * sedang ditulis.
+     */
+    public void sendGenericEvent(byte extension, short evtype, int extraPayloadWords,
+                                  final ResponseDataWriter payloadAfterEvtype) throws IOException {
+        Assert.isTrue(extraPayloadWords >= 0, "extraPayloadWords tidak boleh negatif.");
+        final int payloadSize = 22 + (extraPayloadWords * 4);
+        XStreamLock lock = this.outputStream.lock();
+        try {
+            this.outputStream.writeByte((byte) 35); // xGenericEvent.type, SELALU 35
+            this.outputStream.writeByte(extension);
+            this.outputStream.writeShort((short) this.requestSequenceNumber);
+            this.outputStream.writeInt(extraPayloadWords);
+            this.outputStream.writeShort(evtype);
+            this.outputStream.write(payloadSize, new BufferFiller() {
+                @Override
+                public void write(ByteBuffer byteBuffer) {
+                    int startPos = byteBuffer.position();
+                    payloadAfterEvtype.write(byteBuffer);
+                    int written = byteBuffer.position() - startPos;
+                    // Sisa slot yang tidak diisi caller (mis. field pad
+                    // XGE yang memang harus nol) diisi nol - konsisten
+                    // dengan pola sendReply()/sendEvent() yang sudah ada
+                    // di file ini (pad dengan XResponse.zero).
+                    if (written < payloadSize) {
+                        byteBuffer.put(XResponse.zero, 0, payloadSize - written);
+                    }
+                }
+            });
+            if (lock != null) {
+                lock.close();
+            }
+        } catch (Throwable th) {
+            try {
+                throw th;
+            } catch (Throwable th2) {
+                if (lock != null) {
+                    try {
+                        lock.close();
+                    } catch (Throwable th3) {
+                        th.addSuppressed(th3);
+                    }
+                }
+                throw th2;
+            }
+        }
+    }
 }

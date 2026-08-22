@@ -15,6 +15,21 @@ public abstract class ExtensionEventCodes {
     public static final int MIT_SHM_FIRST_EVENT = 64;
     public static final int MIT_SHM_LAST_EVENT = 64;
 
+    // Ditambahkan: Present pakai XGE (GenericEvent, type selalu 35), jadi
+    // "evtype" di sini BUKAN offset dari firstAssignedEventId spt DRI2/GLX
+    // di atas - evtype ditulis LANGSUNG di field evtype milik xGenericEvent
+    // itu sendiri. Angka bersumber dari spesifikasi resmi presentproto.txt
+    // Appendix A "Protocol Encoding" > PresentEventType / PresentEventMask
+    // (https://cgit.freedesktop.org/xorg/proto/presentproto/tree/presentproto.txt) -
+    // diverifikasi juga cocok dengan urutan field di presentproto.h.
+    public static final int PRESENT_EVTYPE_CONFIGURE_NOTIFY = 0;
+    public static final int PRESENT_EVTYPE_COMPLETE_NOTIFY = 1;
+    public static final int PRESENT_EVTYPE_IDLE_NOTIFY = 2;
+
+    public static final int PRESENT_EVENTMASK_CONFIGURE_NOTIFY = 1;
+    public static final int PRESENT_EVENTMASK_COMPLETE_NOTIFY = 2;
+    public static final int PRESENT_EVENTMASK_IDLE_NOTIFY = 4;
+
     private ExtensionEventCodes() {
     }
 }
