@@ -230,13 +230,30 @@ public class ButtonStickPressAdapter implements TouchAdapter {
 
         /**
          * Seberapa dekat (dalam persentase lebar/tinggi layar x-server) pointer boleh mendekati
-         * tepi sebelum di-recenter paksa ke tengah. Dibuat berbasis persentase (bukan px tetap)
-         * supaya perilakunya konsisten di berbagai resolusi x-server.
+         * tepi sebelum di-recenter paksa. Dibuat berbasis persentase (bukan px tetap) supaya
+         * perilakunya konsisten di berbagai resolusi x-server.
          */
         private static final float EDGE_MARGIN_RATIO = 0.15f;
 
         boolean isRunning = false;
         PointF deltaXY = new PointF();
+
+        /**
+         * Titik acuan tempat pointer di-recenter, DIAMBIL dari posisi pointer x-server saat
+         * sesi drag joystick-mouse ini baru mulai (lihat {@link #doStart()}) -- BUKAN titik
+         * tengah geometris layar x-server ({@code screenWidth/2, screenHeight/2}).
+         * <br/><br/>
+         * Kenapa: titik tengah geometris layar x-server belum tentu sama dengan titik yang
+         * dianggap "netral"/tengah oleh game (mis. kalau window game tidak full-screen, atau
+         * posisi window/viewport game punya offset terhadap layar x-server). Kalau kita warp ke
+         * titik yang salah, setiap recenter mengirim delta besar yang konstan ke game -> kamera
+         * selalu tersentak ke arah yang sama (mis. selalu melihat ke atas) walau jari digeser ke
+         * arah lain. Pakai posisi pointer SAAT drag baru dimulai sebagai acuan aman, karena
+         * posisi itu pasti valid/sudah "dikenal" oleh game (baik dari recenter game sendiri
+         * ataupun sisa posisi terakhir yang sudah stabil), bukan asumsi kita sendiri.
+         */
+        private int anchorX = -1;
+        private int anchorY = -1;
 
         public JoyStickMouseMoveInjector() {
             super(10000000, stickMouse_interval);
@@ -244,12 +261,27 @@ public class ButtonStickPressAdapter implements TouchAdapter {
 
         public void doStart() {
             isRunning = true;
+            captureAnchor();
             start();
         }
 
         public void doStop() {
             cancel();
             isRunning = false;
+            anchorX = -1;
+            anchorY = -1;
+        }
+
+        /** Simpan posisi pointer x-server saat ini sebagai titik acuan recenter untuk sesi ini. */
+        private void captureAnchor() {
+            Point pointer = Const.getXServerHolder().getPointerLocation();
+            if (pointer != null) {
+                anchorX = pointer.x;
+                anchorY = pointer.y;
+            } else {
+                anchorX = -1;
+                anchorY = -1;
+            }
         }
 
         public void setDeltaFragment(float x, float y) {
@@ -274,20 +306,25 @@ public class ButtonStickPressAdapter implements TouchAdapter {
          * relative-mouse-look) jadi stuck, tidak bisa muter 360 derajat penuh.
          * <br/><br/>
          * Solusi: begitu pointer mendekati tepi (dalam {@link #EDGE_MARGIN_RATIO} dari lebar/
-         * tinggi layar), langsung "warp" (teleport) pointer balik ke tengah layar lewat
-         * {@link XServerViewHolder#injectPointerWarpToCenter()} -- jalur warp ini TERPISAH dari
-         * jalur gerakan mouse biasa (injectPointerMove/injectPointerDelta), persis seperti
-         * XWarpPointer/SetCursorPos yang dipakai game FPS sendiri untuk recenter cursor tiap
-         * frame pada mode relative-mouse-look mereka.
+         * tinggi layar), langsung "warp" (teleport) pointer balik ke {@link #anchorX}/
+         * {@link #anchorY} -- posisi pointer saat sesi drag ini dimulai, BUKAN titik tengah
+         * layar x-server -- lewat {@link XServerViewHolder#injectPointerWarp(float, float)}.
+         * Jalur warp ini TERPISAH dari jalur gerakan mouse biasa (injectPointerMove/Delta),
+         * persis seperti XWarpPointer/SetCursorPos yang dipakai game FPS sendiri untuk recenter
+         * cursor tiap frame pada mode relative-mouse-look mereka.
          * <br/><br/>
          * Kenapa kamera TIDAK ikut mental balik ke posisi awal saat recenter ini terjadi:
          * delta yang dikirim ke kamera dihitung murni dari pergeseran jari di area
          * joystick/touchpad ({@link #setDeltaFragment}, berbasis lastFingerX/Y di
          * {@link ButtonStickPressAdapter#notifyMoved}), BUKAN dari posisi pointer x-server.
          * Warp ini hanya mengubah posisi pointer x-server, tidak pernah dibaca balik untuk
-         * menghitung delta berikutnya, jadi tidak menambah/mengurangi delta kamera sama sekali.
+         * menghitung delta berikutnya, jadi tidak menambah/mengurangi delta kamera sama sekali
+         * -- SELAMA titik acuannya sendiri valid (lihat javadoc {@link #anchorX}).
          */
         private void forceCenterCursorIfNearEdge() {
+            if (anchorX < 0 || anchorY < 0)
+                return;
+
             XServerViewHolder holder = Const.getXServerHolder();
 
             int[] screen = holder.getXScreenPixels();
@@ -306,7 +343,7 @@ public class ButtonStickPressAdapter implements TouchAdapter {
                     pointer.y <= marginY || pointer.y >= screen[1] - marginY;
 
             if (nearEdge) {
-                holder.injectPointerWarpToCenter();
+                holder.injectPointerWarp(anchorX, anchorY);
             }
         }
 
