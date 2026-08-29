@@ -229,31 +229,27 @@ public class ButtonStickPressAdapter implements TouchAdapter {
     private static class JoyStickMouseMoveInjector extends CountDownTimer {
 
         /**
-         * Seberapa dekat (dalam persentase lebar/tinggi layar x-server) pointer boleh mendekati
-         * tepi sebelum di-recenter paksa. Dibuat berbasis persentase (bukan px tetap) supaya
-         * perilakunya konsisten di berbagai resolusi x-server.
+         * Kill-switch: set ke {@code false} untuk mematikan seluruh koreksi tepi (soft-wall),
+         * tanpa mengubah apa pun di file lain. Kalau di-set false dan bug masih muncul di luar
+         * kotak joystick ini, berarti sumbernya bukan di sini.
          */
-        private static final float EDGE_MARGIN_RATIO = 0.15f;
+        private static final boolean EDGE_CORRECTION_ENABLED = true;
+
+        /**
+         * Mulai koreksi begitu pointer masuk zona sejauh ini (persentase lebar/tinggi layar
+         * x-server) dari tepi. Dibuat berbasis persentase supaya konsisten di berbagai resolusi.
+         */
+        private static final float SOFT_ZONE_RATIO = 0.30f;
+
+        /**
+         * Kekuatan dorongan koreksi maksimum (px per tick), dipakai saat pointer PERSIS di tepi
+         * (penetrasi 100%). Nilai kecil di awal zona, membesar mendekati tepi (lihat kuadratik
+         * di {@link #computeCorrection}), supaya tidak terasa sebagai tahanan tiba-tiba.
+         */
+        private static final float MAX_CORRECTION_PX_PER_TICK = 10f;
 
         boolean isRunning = false;
         PointF deltaXY = new PointF();
-
-        /**
-         * Titik acuan tempat pointer di-recenter, DIAMBIL dari posisi pointer x-server saat
-         * sesi drag joystick-mouse ini baru mulai (lihat {@link #doStart()}) -- BUKAN titik
-         * tengah geometris layar x-server ({@code screenWidth/2, screenHeight/2}).
-         * <br/><br/>
-         * Kenapa: titik tengah geometris layar x-server belum tentu sama dengan titik yang
-         * dianggap "netral"/tengah oleh game (mis. kalau window game tidak full-screen, atau
-         * posisi window/viewport game punya offset terhadap layar x-server). Kalau kita warp ke
-         * titik yang salah, setiap recenter mengirim delta besar yang konstan ke game -> kamera
-         * selalu tersentak ke arah yang sama (mis. selalu melihat ke atas) walau jari digeser ke
-         * arah lain. Pakai posisi pointer SAAT drag baru dimulai sebagai acuan aman, karena
-         * posisi itu pasti valid/sudah "dikenal" oleh game (baik dari recenter game sendiri
-         * ataupun sisa posisi terakhir yang sudah stabil), bukan asumsi kita sendiri.
-         */
-        private int anchorX = -1;
-        private int anchorY = -1;
 
         public JoyStickMouseMoveInjector() {
             super(10000000, stickMouse_interval);
@@ -261,54 +257,17 @@ public class ButtonStickPressAdapter implements TouchAdapter {
 
         public void doStart() {
             isRunning = true;
-            captureAnchor();
             start();
         }
 
         public void doStop() {
             cancel();
             isRunning = false;
-            anchorX = -1;
-            anchorY = -1;
-        }
-
-        /**
-         * Simpan posisi pointer x-server saat ini sebagai titik acuan recenter untuk sesi ini,
-         * SETELAH di-clamp supaya tidak berada di zona margin tepi ({@link #EDGE_MARGIN_RATIO}).
-         * <br/><br/>
-         * Kalau anchor dibiarkan apa adanya dan kebetulan posisi awal sudah dekat/tepat di tepi
-         * (mis. pointer masih di posisi default (0,0) saat x-server baru mulai, atau sisa sesi
-         * drag sebelumnya berhenti dekat tepi), maka setiap kali {@link #forceCenterCursorIfNearEdge()}
-         * recenter ke anchor itu, posisi barunya MASIH dalam zona margin -> recenter terpicu lagi
-         * di tick berikutnya, dan lagi, di SETIAP tick. Karena recenter selalu balik ke titik yang
-         * sama persis, posisi absolut yang dikirim ke guest antar-tick jadi nyaris tidak berubah
-         * -> guest melihat delta gerakan mendekati nol -> cursor/kamera kelihatan macet total di
-         * seluruh x-server (karena {@code xServer.getPointer()} adalah singleton yang dipakai
-         * semua input, bukan cuma joystick ini). Clamp di sini memastikan anchor SELALU berada di
-         * luar zona margin, jadi setiap kali recenter terjadi, pointer benar-benar menjauh dari
-         * tepi (bukan diam di tempat), dan siklus di atas tidak mungkin terjadi.
-         */
-        private void captureAnchor() {
-            XServerViewHolder holder = Const.getXServerHolder();
-            Point pointer = holder.getPointerLocation();
-            int[] screen = holder.getXScreenPixels();
-
-            if (pointer == null || screen == null || screen.length < 2 || screen[0] <= 0 || screen[1] <= 0) {
-                anchorX = -1;
-                anchorY = -1;
-                return;
-            }
-
-            int marginX = Math.round(screen[0] * EDGE_MARGIN_RATIO);
-            int marginY = Math.round(screen[1] * EDGE_MARGIN_RATIO);
-
-            anchorX = clamp(pointer.x, marginX, screen[0] - marginX);
-            anchorY = clamp(pointer.y, marginY, screen[1] - marginY);
-        }
-
-        private static int clamp(int value, int min, int max) {
-            if (min > max) return (min + max) / 2; // fallback aman untuk layar yang sangat kecil
-            return Math.max(min, Math.min(value, max));
+            // Reset delta juga, supaya kalau ada 1 tick "nyasar" yang sempat lolos tepat saat
+            // cancel() dipanggil (celah kecil yang mungkin terjadi di CountDownTimer Android bila
+            // pesan tick sudah terlanjur di-queue sebelum cancel() diproses), tick nyasar itu
+            // tidak menggerakkan pointer sama sekali (deltaXY sudah nol).
+            deltaXY.set(0, 0);
         }
 
         public void setDeltaFragment(float x, float y) {
@@ -318,60 +277,95 @@ public class ButtonStickPressAdapter implements TouchAdapter {
 
         @Override
         public void onTick(long millisUntilFinished) {
-            if (deltaXY.x != 0 || deltaXY.y != 0)
-                Const.getXServerHolder().injectPointerDelta(deltaXY.x, deltaXY.y);
+            // Guard eksplisit: cegah 1 tick "nyasar" yang mungkin lolos tepat saat cancel()
+            // dipanggil dari thread lain/di titik waktu yang sama (lihat catatan di doStop()).
+            if (!isRunning) return;
 
-            // Force-center-cursor: cegah pointer mentok di tepi x-server (lihat javadoc method).
-            forceCenterCursorIfNearEdge();
+            float dx = deltaXY.x;
+            float dy = deltaXY.y;
+
+            // Koreksi tepi (soft-wall): lihat javadoc computeCorrection(). Dibungkus try/catch +
+            // kill-switch supaya fitur ini TIDAK MUNGKIN mengganggu/memblokir input pointer dari
+            // kontrol lain kalau ada error tak terduga di sini (mis. x-server belum siap saat
+            // rotasi layar) -- lihat EDGE_CORRECTION_ENABLED.
+            if (EDGE_CORRECTION_ENABLED) {
+                try {
+                    PointF correction = computeCorrection();
+                    dx += correction.x;
+                    dy += correction.y;
+                } catch (Exception ignored) {
+                    // Sengaja diabaikan: kegagalan di koreksi TIDAK BOLEH mengganggu input
+                    // pointer dari kontrol lain.
+                }
+            }
+
+            if (dx != 0 || dy != 0)
+                Const.getXServerHolder().injectPointerDelta(dx, dy);
         }
 
         /**
-         * Bug lama: begitu pointer x-server sampai batas layar (mis. tepi kanan), posisi pointer
-         * akan "clamp"/mentok di titik itu terus. Karena {@code injectPointerDelta} selalu
-         * menghitung posisi baru dari posisi pointer SAAT INI (yang sudah mentok), delta
-         * berikutnya ke arah yang sama jadi tidak berpengaruh apa-apa -> kamera game (mode
-         * relative-mouse-look) jadi stuck, tidak bisa muter 360 derajat penuh.
+         * Bug lama (round 1): begitu pointer x-server sampai batas layar, posisi pointer
+         * "clamp"/mentok di titik itu terus -> kamera (mode relative-mouse-look) jadi stuck.
+         * Game ini TERKONFIRMASI TIDAK punya auto-recenter sendiri (GetCursorPos absolut dibaca
+         * tiap frame apa adanya, tanpa SetCursorPos balik ke tengah) -- jadi butuh bantuan dari
+         * sisi kita, bukan cuma menunggu game menanganinya sendiri.
          * <br/><br/>
-         * Solusi: begitu pointer mendekati tepi (dalam {@link #EDGE_MARGIN_RATIO} dari lebar/
-         * tinggi layar), langsung "warp" (teleport) pointer balik ke {@link #anchorX}/
-         * {@link #anchorY} -- posisi pointer saat sesi drag ini dimulai, BUKAN titik tengah
-         * layar x-server -- lewat {@link XServerViewHolder#injectPointerWarp(float, float)}.
-         * Jalur warp ini TERPISAH dari jalur gerakan mouse biasa (injectPointerMove/Delta),
-         * persis seperti XWarpPointer/SetCursorPos yang dipakai game FPS sendiri untuk recenter
-         * cursor tiap frame pada mode relative-mouse-look mereka.
+         * Pendekatan LAMA (hard-recenter/teleport sekali ke titik tertentu saat dekat tepi) TIDAK
+         * BISA dipakai di sini: dikonfirmasi lewat pembacaan smali {@code LorieView.sendMouseEvent}
+         * (native) bahwa satu-satunya jalur pengiriman posisi mouse ke guest HANYA mendukung
+         * koordinat ABSOLUT -- tidak ada mode relative/delta, dan tidak ada cara membuat suatu
+         * perubahan posisi "tidak terlihat" oleh guest. Teleport sekali besar SELALU muncul
+         * sebagai satu lompatan tiba-tiba di posisi absolut yang dibaca game sebagai input asli
+         * (baik lewat recenter "silent" di sisi Java maupun warp biasa -- keduanya ujungnya
+         * menghasilkan satu lompatan diskontinu yang sama besar begitu delta normal berikutnya
+         * dihitung dari titik hasil recenter).
          * <br/><br/>
-         * Kenapa kamera TIDAK ikut mental balik ke posisi awal saat recenter ini terjadi:
-         * delta yang dikirim ke kamera dihitung murni dari pergeseran jari di area
-         * joystick/touchpad ({@link #setDeltaFragment}, berbasis lastFingerX/Y di
-         * {@link ButtonStickPressAdapter#notifyMoved}), BUKAN dari posisi pointer x-server.
-         * Warp ini hanya mengubah posisi pointer x-server, tidak pernah dibaca balik untuk
-         * menghitung delta berikutnya, jadi tidak menambah/mengurangi delta kamera sama sekali
-         * -- SELAMA titik acuannya sendiri valid (lihat javadoc {@link #anchorX}).
+         * Solusi di sini: JANGAN pernah kirim lompatan diskontinu sama sekali. Sebagai ganti,
+         * begitu pointer masuk zona {@link #SOFT_ZONE_RATIO} dari tepi, tambahkan dorongan kecil
+         * berlawanan arah tepi ke DELTA NORMAL yang sudah mau dikirim tiap tick (bukan event
+         * terpisah) -- besarnya kuadratik terhadap seberapa dalam pointer masuk zona (kecil di
+         * awal zona, membesar mendekati tepi asli). Karena dorongan ini MENYATU dengan delta
+         * biasa (bukan lompatan absolut terpisah), game tidak melihat diskontinuitas -- yang
+         * terasa cuma seperti sedikit "tahanan" saat mendekati tepi layar, bukan kamera
+         * tersentak/lompat. Selama joystick tidak ditahan penuh ke satu arah terus-menerus,
+         * pointer tidak akan pernah benar-benar mencapai tepi asli.
          */
-        private void forceCenterCursorIfNearEdge() {
-            if (anchorX < 0 || anchorY < 0)
-                return;
+        private PointF computeCorrection() {
+            PointF correction = new PointF(0, 0);
 
             XServerViewHolder holder = Const.getXServerHolder();
-
             int[] screen = holder.getXScreenPixels();
             if (screen == null || screen.length < 2 || screen[0] <= 0 || screen[1] <= 0)
-                return;
+                return correction;
 
             Point pointer = holder.getPointerLocation();
             if (pointer == null)
-                return;
+                return correction;
 
-            int marginX = Math.round(screen[0] * EDGE_MARGIN_RATIO);
-            int marginY = Math.round(screen[1] * EDGE_MARGIN_RATIO);
+            float softZoneX = screen[0] * SOFT_ZONE_RATIO;
+            float softZoneY = screen[1] * SOFT_ZONE_RATIO;
 
-            boolean nearEdge =
-                    pointer.x <= marginX || pointer.x >= screen[0] - marginX ||
-                    pointer.y <= marginY || pointer.y >= screen[1] - marginY;
-
-            if (nearEdge) {
-                holder.injectPointerWarp(anchorX, anchorY);
+            if (softZoneX > 0) {
+                if (pointer.x < softZoneX) {
+                    float penetration = (softZoneX - pointer.x) / softZoneX; // 0..1
+                    correction.x += MAX_CORRECTION_PX_PER_TICK * penetration * penetration;
+                } else if (pointer.x > screen[0] - softZoneX) {
+                    float penetration = (pointer.x - (screen[0] - softZoneX)) / softZoneX;
+                    correction.x -= MAX_CORRECTION_PX_PER_TICK * penetration * penetration;
+                }
             }
+
+            if (softZoneY > 0) {
+                if (pointer.y < softZoneY) {
+                    float penetration = (softZoneY - pointer.y) / softZoneY;
+                    correction.y += MAX_CORRECTION_PX_PER_TICK * penetration * penetration;
+                } else if (pointer.y > screen[1] - softZoneY) {
+                    float penetration = (pointer.y - (screen[1] - softZoneY)) / softZoneY;
+                    correction.y -= MAX_CORRECTION_PX_PER_TICK * penetration * penetration;
+                }
+            }
+
+            return correction;
         }
 
         @Override
