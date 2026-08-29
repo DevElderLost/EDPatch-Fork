@@ -150,6 +150,17 @@ public class ViewFacade {
         injectPointerDelta(dx, dy, 1);
     }
 
+    /**
+     * Reposisi pointer secara langsung lewat jalur "warp" (lihat {@link EventsInjector#injectPointerWarp}).
+     * Dipakai untuk force-center-cursor: memindahkan pointer x-server kembali ke tengah layar
+     * tanpa itu dianggap sebagai gerakan mouse biasa oleh guest.
+     */
+    public void injectPointerWarp(int x, int y) {
+        try (LocksManager.XLock lock = xServer.getLocksManager().lockForInputDevicesManipulation()){
+            xServer.getEventsInjector().injectPointerWarp(x, y);
+        }
+    }
+
     public void injectPointerButtonPress(int btnCode) {
         try (LocksManager.XLock lock = xServer.getLocksManager().lockForInputDevicesManipulation()){
             xServer.getEventsInjector().injectPointerButtonPress(btnCode);

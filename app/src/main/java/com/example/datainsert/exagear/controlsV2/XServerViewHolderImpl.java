@@ -56,6 +56,12 @@ public class XServerViewHolderImpl implements XServerViewHolder {
     }
 
     @Override
+    public void injectPointerWarp(float x, float y) {
+        if (!Const.isEditing())
+            getXServerFacade().injectPointerWarp((int) x, (int) y);
+    }
+
+    @Override
     public void injectPointerButtonPress(int button) {
         if (!Const.isEditing())
             getXServerFacade().injectPointerButtonPress(button);

@@ -6,9 +6,11 @@ import android.graphics.PointF;
 import android.os.CountDownTimer;
 import android.support.annotation.IntDef;
 
+import com.eltechs.axs.geom.Point;
 import com.example.datainsert.exagear.controlsV2.Const;
 import com.example.datainsert.exagear.controlsV2.Finger;
 import com.example.datainsert.exagear.controlsV2.TouchAdapter;
+import com.example.datainsert.exagear.controlsV2.XServerViewHolder;
 import com.example.datainsert.exagear.controlsV2.model.OneStick;
 
 import java.lang.annotation.Retention;
@@ -226,6 +228,13 @@ public class ButtonStickPressAdapter implements TouchAdapter {
 
     private static class JoyStickMouseMoveInjector extends CountDownTimer {
 
+        /**
+         * Seberapa dekat (dalam persentase lebar/tinggi layar x-server) pointer boleh mendekati
+         * tepi sebelum di-recenter paksa ke tengah. Dibuat berbasis persentase (bukan px tetap)
+         * supaya perilakunya konsisten di berbagai resolusi x-server.
+         */
+        private static final float EDGE_MARGIN_RATIO = 0.15f;
+
         boolean isRunning = false;
         PointF deltaXY = new PointF();
 
@@ -252,6 +261,53 @@ public class ButtonStickPressAdapter implements TouchAdapter {
         public void onTick(long millisUntilFinished) {
             if (deltaXY.x != 0 || deltaXY.y != 0)
                 Const.getXServerHolder().injectPointerDelta(deltaXY.x, deltaXY.y);
+
+            // Force-center-cursor: cegah pointer mentok di tepi x-server (lihat javadoc method).
+            forceCenterCursorIfNearEdge();
+        }
+
+        /**
+         * Bug lama: begitu pointer x-server sampai batas layar (mis. tepi kanan), posisi pointer
+         * akan "clamp"/mentok di titik itu terus. Karena {@code injectPointerDelta} selalu
+         * menghitung posisi baru dari posisi pointer SAAT INI (yang sudah mentok), delta
+         * berikutnya ke arah yang sama jadi tidak berpengaruh apa-apa -> kamera game (mode
+         * relative-mouse-look) jadi stuck, tidak bisa muter 360 derajat penuh.
+         * <br/><br/>
+         * Solusi: begitu pointer mendekati tepi (dalam {@link #EDGE_MARGIN_RATIO} dari lebar/
+         * tinggi layar), langsung "warp" (teleport) pointer balik ke tengah layar lewat
+         * {@link XServerViewHolder#injectPointerWarpToCenter()} -- jalur warp ini TERPISAH dari
+         * jalur gerakan mouse biasa (injectPointerMove/injectPointerDelta), persis seperti
+         * XWarpPointer/SetCursorPos yang dipakai game FPS sendiri untuk recenter cursor tiap
+         * frame pada mode relative-mouse-look mereka.
+         * <br/><br/>
+         * Kenapa kamera TIDAK ikut mental balik ke posisi awal saat recenter ini terjadi:
+         * delta yang dikirim ke kamera dihitung murni dari pergeseran jari di area
+         * joystick/touchpad ({@link #setDeltaFragment}, berbasis lastFingerX/Y di
+         * {@link ButtonStickPressAdapter#notifyMoved}), BUKAN dari posisi pointer x-server.
+         * Warp ini hanya mengubah posisi pointer x-server, tidak pernah dibaca balik untuk
+         * menghitung delta berikutnya, jadi tidak menambah/mengurangi delta kamera sama sekali.
+         */
+        private void forceCenterCursorIfNearEdge() {
+            XServerViewHolder holder = Const.getXServerHolder();
+
+            int[] screen = holder.getXScreenPixels();
+            if (screen == null || screen.length < 2 || screen[0] <= 0 || screen[1] <= 0)
+                return;
+
+            Point pointer = holder.getPointerLocation();
+            if (pointer == null)
+                return;
+
+            int marginX = Math.round(screen[0] * EDGE_MARGIN_RATIO);
+            int marginY = Math.round(screen[1] * EDGE_MARGIN_RATIO);
+
+            boolean nearEdge =
+                    pointer.x <= marginX || pointer.x >= screen[0] - marginX ||
+                    pointer.y <= marginY || pointer.y >= screen[1] - marginY;
+
+            if (nearEdge) {
+                holder.injectPointerWarpToCenter();
+            }
         }
 
         @Override

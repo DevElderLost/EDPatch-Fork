@@ -65,6 +65,11 @@ public class XServerViewHolderStub implements XServerViewHolder {
     }
 
     @Override
+    public void injectPointerWarp(float x, float y) {
+
+    }
+
+    @Override
     public void injectPointerButtonPress(int button) {
 
     }

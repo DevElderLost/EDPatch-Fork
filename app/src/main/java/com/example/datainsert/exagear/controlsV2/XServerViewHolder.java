@@ -164,6 +164,26 @@ public interface XServerViewHolder {
 
     void injectPointerDelta(float x, float y, int times);
 
+    /**
+     * Pindahkan pointer x-server langsung ke koordinat (x, y) lewat jalur "warp" (setara
+     * XWarpPointer/SetCursorPos), BUKAN lewat jalur gerakan mouse biasa (injectPointerMove).
+     * <br/>Dipakai oleh mode force-center-cursor pada joystick-mouse-move, supaya pointer bisa
+     * "diteleport" balik ke tengah layar setiap kali mendekati batas x-server, tanpa recenter
+     * ini ikut dihitung sebagai gerakan kamera oleh game/guest.
+     */
+    void injectPointerWarp(float x, float y);
+
+    /**
+     * Shortcut: warp pointer ke tengah layar x-server saat ini. Aman dipanggil berkali-kali;
+     * tidak melakukan apa pun jika ukuran layar x-server belum tersedia (misal xserver belum siap).
+     */
+    default void injectPointerWarpToCenter() {
+        int[] screen = getXScreenPixels();
+        if (screen == null || screen.length < 2 || screen[0] <= 0 || screen[1] <= 0)
+            return;
+        injectPointerWarp(screen[0] / 2f, screen[1] / 2f);
+    }
+
     void injectPointerButtonPress(int button);
 
     void injectPointerButtonRelease(int button);
