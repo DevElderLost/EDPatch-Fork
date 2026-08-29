@@ -165,11 +165,14 @@ public interface XServerViewHolder {
     void injectPointerDelta(float x, float y, int times);
 
     /**
-     * Pindahkan pointer x-server langsung ke koordinat (x, y) lewat jalur "warp" (setara
-     * XWarpPointer/SetCursorPos), BUKAN lewat jalur gerakan mouse biasa (injectPointerMove).
+     * Reposisi pointer x-server langsung ke koordinat (x, y) TANPA memicu event apa pun ke
+     * guest/game (tidak ada motion event yang dikirim sama sekali) -- BUKAN lewat jalur gerakan
+     * mouse biasa (injectPointerMove) dan BUKAN X11 WarpPointer (yang tetap mengirim event).
      * <br/>Dipakai oleh mode force-center-cursor pada joystick-mouse-move, supaya pointer bisa
-     * "diteleport" balik ke tengah layar setiap kali mendekati batas x-server, tanpa recenter
-     * ini ikut dihitung sebagai gerakan kamera oleh game/guest.
+     * "diteleport" balik ke posisi acuan setiap kali mendekati batas x-server, tanpa recenter
+     * ini terbaca sebagai input mouse asli oleh game/guest (kalau terbaca, kamera jadi seperti
+     * stuck atau balik ke posisi sebelum geser, karena guest ikut memproses posisi hasil warp
+     * seolah itu gerakan asli).
      */
     void injectPointerWarp(float x, float y);
 

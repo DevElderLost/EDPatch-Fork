@@ -52,6 +52,22 @@ public class Pointer {
         this.listeners.sendPointerWarped(this.xPos, this.yPos);
     }
 
+    /**
+     * Reposisi pointer TANPA memicu event apa pun ke listener (tidak ada pointerMoved maupun
+     * pointerWarped -- beda dengan {@link #setCoordinates} dan {@link #warpOnCoordinates} yang
+     * keduanya tetap mengirim notifikasi ke guest/game).
+     * <br/><br/>
+     * Dipakai untuk keperluan internal murni seperti force-center-cursor pada mode
+     * joystick-mouse: recenter ini HARUS tidak terlihat sama sekali oleh guest/game (kalau
+     * terlihat, guest akan menganggapnya sebagai gerakan mouse asli -- itu penyebab bug kamera
+     * "seperti stuck"/"balik ke posisi sebelum geser" saat recenter terjadi mendekati tepi).
+     * Method ini hanya mengubah state x/y internal {@link Pointer}, yang nantinya jadi basis
+     * perhitungan posisi baru pada {@code injectPointerDelta} berikutnya.
+     */
+    public void repositionSilently(int x, int y) {
+        updateCoordinates(x, y);
+    }
+
     public boolean isButtonPressed(int button) {
         return this.buttons.isSet(KeyButNames.getFlagForButtonNumber(button));
     }

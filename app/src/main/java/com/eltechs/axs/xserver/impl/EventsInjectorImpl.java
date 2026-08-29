@@ -32,10 +32,10 @@ public class EventsInjectorImpl implements EventsInjector {
 
     @Override // com.eltechs.axs.xserver.EventsInjector
     public void injectPointerWarp(int x, int y) {
-        // pointer.warpOnCoordinates() -> memicu event pointerWarped (bukan pointerMoved biasa),
-        // ini adalah jalur X11 WarpPointer/SetCursorPos yang sama dengan yang dipakai game
-        // untuk recenter cursor pada mode relative-mouse-look milik mereka sendiri.
-        this.xServer.getPointer().warpOnCoordinates(x, y);
+        // repositionSilently() TIDAK memicu event apa pun ke guest (beda dengan
+        // warpOnCoordinates() yang tetap mengirim notifikasi pointerWarped -- itu yang
+        // sebelumnya menyebabkan guest membaca recenter sebagai input mouse asli).
+        this.xServer.getPointer().repositionSilently(x, y);
     }
 
     @Override // com.eltechs.axs.xserver.EventsInjector
