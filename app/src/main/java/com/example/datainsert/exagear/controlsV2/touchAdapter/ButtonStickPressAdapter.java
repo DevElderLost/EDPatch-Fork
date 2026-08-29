@@ -272,16 +272,43 @@ public class ButtonStickPressAdapter implements TouchAdapter {
             anchorY = -1;
         }
 
-        /** Simpan posisi pointer x-server saat ini sebagai titik acuan recenter untuk sesi ini. */
+        /**
+         * Simpan posisi pointer x-server saat ini sebagai titik acuan recenter untuk sesi ini,
+         * SETELAH di-clamp supaya tidak berada di zona margin tepi ({@link #EDGE_MARGIN_RATIO}).
+         * <br/><br/>
+         * Kalau anchor dibiarkan apa adanya dan kebetulan posisi awal sudah dekat/tepat di tepi
+         * (mis. pointer masih di posisi default (0,0) saat x-server baru mulai, atau sisa sesi
+         * drag sebelumnya berhenti dekat tepi), maka setiap kali {@link #forceCenterCursorIfNearEdge()}
+         * recenter ke anchor itu, posisi barunya MASIH dalam zona margin -> recenter terpicu lagi
+         * di tick berikutnya, dan lagi, di SETIAP tick. Karena recenter selalu balik ke titik yang
+         * sama persis, posisi absolut yang dikirim ke guest antar-tick jadi nyaris tidak berubah
+         * -> guest melihat delta gerakan mendekati nol -> cursor/kamera kelihatan macet total di
+         * seluruh x-server (karena {@code xServer.getPointer()} adalah singleton yang dipakai
+         * semua input, bukan cuma joystick ini). Clamp di sini memastikan anchor SELALU berada di
+         * luar zona margin, jadi setiap kali recenter terjadi, pointer benar-benar menjauh dari
+         * tepi (bukan diam di tempat), dan siklus di atas tidak mungkin terjadi.
+         */
         private void captureAnchor() {
-            Point pointer = Const.getXServerHolder().getPointerLocation();
-            if (pointer != null) {
-                anchorX = pointer.x;
-                anchorY = pointer.y;
-            } else {
+            XServerViewHolder holder = Const.getXServerHolder();
+            Point pointer = holder.getPointerLocation();
+            int[] screen = holder.getXScreenPixels();
+
+            if (pointer == null || screen == null || screen.length < 2 || screen[0] <= 0 || screen[1] <= 0) {
                 anchorX = -1;
                 anchorY = -1;
+                return;
             }
+
+            int marginX = Math.round(screen[0] * EDGE_MARGIN_RATIO);
+            int marginY = Math.round(screen[1] * EDGE_MARGIN_RATIO);
+
+            anchorX = clamp(pointer.x, marginX, screen[0] - marginX);
+            anchorY = clamp(pointer.y, marginY, screen[1] - marginY);
+        }
+
+        private static int clamp(int value, int min, int max) {
+            if (min > max) return (min + max) / 2; // fallback aman untuk layar yang sangat kecil
+            return Math.max(min, Math.min(value, max));
         }
 
         public void setDeltaFragment(float x, float y) {
